@@ -10,9 +10,7 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>
-        AI Business Management System
-    </title>
+    <title>AI Business Management System</title>
 
     <link
         rel="stylesheet"
@@ -21,11 +19,9 @@
 
 </head>
 
-
-<body class="login-body">
+<body class="login-page">
 
     <div class="cursor-glow"></div>
-
 
     <div class="login-container">
 
@@ -35,7 +31,6 @@
                 AI
             </div>
 
-
             <h1>
                 AI Business
             </h1>
@@ -44,21 +39,15 @@
                 Management System
             </h2>
 
-
             <p class="login-description">
-
-                Intelligent business management
-                and analysis platform
-
+                Smart business management dashboard
             </p>
 
 
             {% if error %}
 
             <div class="error-message">
-
                 {{ error }}
-
             </div>
 
             {% endif %}
@@ -69,68 +58,45 @@
                 action="{{ url_for('login') }}"
             >
 
-                <div class="input-group">
+                <label>
+                    Username
+                </label>
 
-                    <label>
-                        Username
-                    </label>
-
-                    <input
-                        type="text"
-                        name="username"
-                        placeholder="Enter username"
-                        required
-                    >
-
-                </div>
+                <input
+                    type="text"
+                    name="username"
+                    placeholder="Enter username"
+                    required
+                >
 
 
-                <div class="input-group">
+                <label>
+                    Password
+                </label>
 
-                    <label>
-                        Password
-                    </label>
-
-                    <input
-                        type="password"
-                        name="password"
-                        placeholder="Enter password"
-                        required
-                    >
-
-                </div>
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Enter password"
+                    required
+                >
 
 
                 <button
                     type="submit"
-                    class="neon-button login-button"
+                    class="neon-button"
                 >
                     Login
                 </button>
 
             </form>
 
-
-            <div class="login-info">
-
-                <p>
-                    Admin: admin / admin123
-                </p>
-
-                <p>
-                    User: user / user123
-                </p>
-
-            </div>
-
         </div>
 
     </div>
 
 
-    <script
-        src="{{ url_for('static', filename='app.js') }}"
-    ></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
 
 </body>
 
