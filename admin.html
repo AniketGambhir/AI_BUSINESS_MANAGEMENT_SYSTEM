@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Admin Dashboard
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+    <div class="cursor-glow"></div>
+
+
+    <!-- =====================================================
+         TOP BAR
+    ====================================================== -->
+
+    <header class="topbar">
+
+        <div>
+
+            <h1>
+                AI Business Management System
+            </h1>
+
+            <p>
+                Admin Dashboard
+            </p>
+
+        </div>
+
+
+        <div class="topbar-right">
+
+            <span class="user-badge">
+
+                Admin:
+                {{ username }}
+
+            </span>
+
+
+            <a
+                href="{{ url_for('logout') }}"
+                class="logout-button"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <main class="dashboard">
+
+
+        <!-- =================================================
+             SUMMARY
+        ================================================== -->
+
+        <section class="summary-grid">
+
+
+            <div class="summary-card">
+
+                <span>
+                    Total Orders
+                </span>
+
+                <strong id="totalOrders">
+                    0
+                </strong>
+
+                <small>
+                    Orders stored in database
+                </small>
+
+            </div>
+
+
+            <div class="summary-card">
+
+                <span>
+                    Total Sales
+                </span>
+
+                <strong id="totalSales">
+                    ₹0
+                </strong>
+
+                <small>
+                    Total order value
+                </small>
+
+            </div>
+
+
+            <div class="summary-card">
+
+                <span>
+                    Average Order
+                </span>
+
+                <strong id="averageOrder">
+                    ₹0
+                </strong>
+
+                <small>
+                    Average order value
+                </small>
+
+            </div>
+
+
+            <div class="summary-card">
+
+                <span>
+                    Highest Order
+                </span>
+
+                <strong id="highestOrder">
+                    ₹0
+                </strong>
+
+                <small>
+                    Highest recorded order
+                </small>
+
+            </div>
+
+
+        </section>
+
+
+        <!-- =================================================
+             BUSINESS OVERVIEW
+        ================================================== -->
+
+        <section class="dashboard-section">
+
+            <div class="section-title">
+
+                <div>
+
+                    <h2>
+                        Business Overview
+                    </h2>
+
+                    <p>
+                        Simple visual representation of
+                        current business data
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="simple-chart-grid">
+
+
+                <div class="simple-chart-card">
+
+                    <h3>
+                        Orders by Status
+                    </h3>
+
+                    <p>
+                        Number of orders in each status
+                    </p>
+
+
+                    <div class="simple-chart-container">
+
+                        <canvas
+                            id="orderStatusChart"
+                        ></canvas>
+
+                    </div>
+
+                </div>
+
+
+                <div class="simple-chart-card">
+
+                    <h3>
+                        Inventory by Category
+                    </h3>
+
+                    <p>
+                        Available quantity by category
+                    </p>
+
+
+                    <div class="simple-chart-container">
+
+                        <canvas
+                            id="inventoryChart"
+                        ></canvas>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             DATABASE TABLES
+        ================================================== -->
+
+        <section class="dashboard-section">
+
+            <div class="section-title">
+
+                <div>
+
+                    <h2>
+                        Database Tables
+                    </h2>
+
+                    <p>
+                        Select a table to manage its data
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="table-buttons">
+
+                {% for table in tables %}
+
+                <button
+                    class="table-button"
+                    onclick="loadAdminTable('{{ table }}')"
+                >
+                    {{ table|upper }}
+                </button>
+
+                {% endfor %}
+
+            </div>
+
+
+            <div
+                id="adminTableArea"
+                class="table-area"
+            >
+
+                <p class="empty-message">
+
+                    Select a table above to display data.
+
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             LARGE AI ANALYSIS
+        ================================================== -->
+
+        <section class="dashboard-section ai-section">
+
+            <div class="section-title">
+
+                <div>
+
+                    <h2>
+                        AI Business Analysis
+                    </h2>
+
+                    <p>
+                        Detailed analysis generated dynamically
+                        from your MySQL business data
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="ai-main-summary">
+
+                <h3>
+                    Business Summary
+                </h3>
+
+                <p id="aiSalesSummary">
+                    Loading AI business summary...
+                </p>
+
+            </div>
+
+
+            <div class="ai-summary-grid">
+
+
+                <div class="ai-summary-card">
+
+                    <span>
+                        Orders Analysed
+                    </span>
+
+                    <strong id="aiOrders">
+                        0
+                    </strong>
+
+                </div>
+
+
+                <div class="ai-summary-card">
+
+                    <span>
+                        Total Sales
+                    </span>
+
+                    <strong id="aiTotalSales">
+                        ₹0
+                    </strong>
+
+                </div>
+
+
+                <div class="ai-summary-card">
+
+                    <span>
+                        Average Order
+                    </span>
+
+                    <strong id="aiAverage">
+                        ₹0
+                    </strong>
+
+                </div>
+
+
+                <div class="ai-summary-card">
+
+                    <span>
+                        Highest Order
+                    </span>
+
+                    <strong id="aiHighest">
+                        ₹0
+                    </strong>
+
+                </div>
+
+
+                <div class="ai-summary-card">
+
+                    <span>
+                        Lowest Order
+                    </span>
+
+                    <strong id="aiLowest">
+                        ₹0
+                    </strong>
+
+                </div>
+
+
+                <div class="ai-summary-card">
+
+                    <span>
+                        Predicted Next Order
+                    </span>
+
+                    <strong id="aiPrediction">
+                        ₹0
+                    </strong>
+
+                </div>
+
+
+            </div>
+
+
+            <!-- AI CHARTS -->
+
+            <div class="ai-chart-grid">
+
+
+                <div class="ai-chart-card">
+
+                    <h3>
+                        Sales Trend
+                    </h3>
+
+                    <p>
+                        Sales movement based on order dates
+                    </p>
+
+
+                    <div class="ai-chart-container">
+
+                        <canvas
+                            id="salesTrendChart"
+                        ></canvas>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ai-chart-card">
+
+                    <h3>
+                        Sales by Order Status
+                    </h3>
+
+                    <p>
+                        Sales value for each order status
+                    </p>
+
+
+                    <div class="ai-chart-container">
+
+                        <canvas
+                            id="salesStatusChart"
+                        ></canvas>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ai-chart-card full-chart">
+
+                    <h3>
+                        Inventory Overview
+                    </h3>
+
+                    <p>
+                        Inventory quantity by category
+                    </p>
+
+
+                    <div class="ai-chart-container">
+
+                        <canvas
+                            id="aiInventoryChart"
+                        ></canvas>
+
+                    </div>
+
+                </div>
+
+
+            </div>
+
+
+            <!-- INSIGHTS -->
+
+            <div class="ai-insights-title">
+
+                <h3>
+                    Detailed AI Insights
+                </h3>
+
+                <p>
+                    Easy-to-understand explanation of the
+                    business data
+                </p>
+
+            </div>
+
+
+            <div class="ai-description-grid">
+
+
+                <div class="ai-description-card">
+
+                    <h3>
+                        Sales Performance
+                    </h3>
+
+                    <p id="aiSalesPerformance">
+                        Loading...
+                    </p>
+
+                </div>
+
+
+                <div class="ai-description-card">
+
+                    <h3>
+                        Order Pattern
+                    </h3>
+
+                    <p id="aiOrderPattern">
+                        Loading...
+                    </p>
+
+                </div>
+
+
+                <div class="ai-description-card">
+
+                    <h3>
+                        Trend Analysis
+                    </h3>
+
+                    <p id="aiTrendAnalysis">
+                        Loading...
+                    </p>
+
+                </div>
+
+
+                <div class="ai-description-card">
+
+                    <h3>
+                        AI Prediction
+                    </h3>
+
+                    <p id="aiPredictionAnalysis">
+                        Loading...
+                    </p>
+
+                </div>
+
+
+            </div>
+
+
+            <div class="ai-recommendation">
+
+                <h3>
+                    AI Business Recommendation
+                </h3>
+
+                <p id="aiRecommendation">
+                    Loading...
+                </p>
+
+            </div>
+
+
+        </section>
+
+
+    </main>
+
+
+    <script
+        src="{{ url_for('static', filename='app.js') }}"
+    ></script>
+
+</body>
+
+</html>
