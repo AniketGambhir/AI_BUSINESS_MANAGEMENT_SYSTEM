@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AI Business Management System</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body class="login-page">
+
+    <div class="cursor-glow"></div>
+
+    <div class="login-container">
+
+        <div class="login-card">
+
+            <div class="logo-circle">
+                AI
+            </div>
+
+            <h1>
+                AI Business
+            </h1>
+
+            <h2>
+                Management System
+            </h2>
+
+            <p class="login-description">
+                Smart business management dashboard
+            </p>
+
+
+            {% if error %}
+
+            <div class="error-message">
+                {{ error }}
+            </div>
+
+            {% endif %}
+
+
+            <form
+                method="POST"
+                action="{{ url_for('login') }}"
+            >
+
+                <label>
+                    Username
+                </label>
+
+                <input
+                    type="text"
+                    name="username"
+                    placeholder="Enter username"
+                    required
+                >
+
+
+                <label>
+                    Password
+                </label>
+
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Enter password"
+                    required
+                >
+
+
+                <button
+                    type="submit"
+                    class="neon-button"
+                >
+                    Login
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+
+</body>
+
+</html>
