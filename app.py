@@ -1,11 +1,14 @@
+import os
+from functools import wraps
+
 from flask import (
     Flask,
     render_template,
     request,
+    jsonify,
     redirect,
     url_for,
-    session,
-    jsonify
+    session
 )
 
 from database import get_connection
@@ -14,34 +17,31 @@ from ai_analysis import analyze_sales
 
 app = Flask(__name__)
 
-app.secret_key = "ai_business_management_secret_key"
+# Secret key comes from the environment (set SECRET_KEY on Render)
+app.secret_key = os.environ.get("SECRET_KEY", "change-me-locally")
 
 
 # =========================================================
-# USERS
+# LOGIN USERS (passwords come from environment variables)
 # =========================================================
 
 USERS = {
-
     "admin": {
-        "password": "admin123",
+        "password": os.environ.get("ADMIN_PASSWORD", "admin123"),
         "role": "admin"
     },
-
     "user": {
-        "password": "user123",
+        "password": os.environ.get("USER_PASSWORD", "user123"),
         "role": "user"
     }
-
 }
 
 
 # =========================================================
-# TABLE PERMISSIONS
+# TABLES
 # =========================================================
 
 ALL_TABLES = [
-
     "customer",
     "employee",
     "product",
@@ -49,340 +49,166 @@ ALL_TABLES = [
     "orders",
     "invoice",
     "project"
-
 ]
 
-
 USER_VIEW_TABLES = [
-
     "customer",
     "product",
     "orders",
     "project"
-
 ]
 
 
 # =========================================================
-# HELPER
-# =========================================================
-
-def allowed_table(table):
-
-    return table in ALL_TABLES
-
-
-def get_primary_key(cursor, table):
-
-    cursor.execute(
-        f"SHOW KEYS FROM `{table}` "
-        f"WHERE Key_name = 'PRIMARY'"
-    )
-
-    result = cursor.fetchone()
-
-    if result:
-
-        return result["Column_name"]
-
-    return None
-
-
-def get_columns(cursor, table):
-
-    cursor.execute(
-        f"SHOW COLUMNS FROM `{table}`"
-    )
-
-    return cursor.fetchall()
-
-
-def get_table_data(
-    cursor,
-    table,
-    search=""
-):
-
-    columns = get_columns(
-        cursor,
-        table
-    )
-
-    column_names = [
-        column["Field"]
-        for column in columns
-    ]
-
-
-    query = (
-        f"SELECT * FROM `{table}`"
-    )
-
-    params = []
-
-
-    if search:
-
-        conditions = []
-
-        for column in column_names:
-
-            conditions.append(
-                f"CAST(`{column}` AS CHAR) LIKE %s"
-            )
-
-            params.append(
-                f"%{search}%"
-            )
-
-
-        query += (
-            " WHERE "
-            +
-            " OR ".join(
-                conditions
-            )
-        )
-
-
-    primary_key = get_primary_key(
-        cursor,
-        table
-    )
-
-
-    if primary_key:
-
-        query += (
-            f" ORDER BY `{primary_key}`"
-        )
-
-
-    cursor.execute(
-        query,
-        params
-    )
-
-    rows = cursor.fetchall()
-
-
-    return {
-
-        "columns":
-            column_names,
-
-        "rows":
-            rows,
-
-        "primary_key":
-            primary_key
-
-    }
-
-
-# =========================================================
-# LOGIN REQUIRED
+# DECORATORS
 # =========================================================
 
 def login_required(function):
 
+    @wraps(function)
     def wrapper(*args, **kwargs):
 
         if "username" not in session:
+            return redirect(url_for("login"))
 
-            return redirect(
-                url_for("login")
-            )
-
-        return function(
-            *args,
-            **kwargs
-        )
-
-    wrapper.__name__ = function.__name__
+        return function(*args, **kwargs)
 
     return wrapper
 
-
-# =========================================================
-# ADMIN REQUIRED
-# =========================================================
 
 def admin_required(function):
 
+    @wraps(function)
     def wrapper(*args, **kwargs):
 
         if "username" not in session:
-
-            return redirect(
-                url_for("login")
-            )
+            return redirect(url_for("login"))
 
         if session.get("role") != "admin":
+            return jsonify({"error": "Admin access required."}), 403
 
-            return "Access denied", 403
-
-        return function(
-            *args,
-            **kwargs
-        )
-
-    wrapper.__name__ = function.__name__
+        return function(*args, **kwargs)
 
     return wrapper
 
 
 # =========================================================
-# HOME
+# HELPERS
+# =========================================================
+
+def get_table_columns(table):
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor()
+        cursor.execute(f"SHOW COLUMNS FROM `{table}`")
+        return [row[0] for row in cursor.fetchall()]
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+def get_primary_key(table):
+
+    connection = None
+    cursor = None
+
+    try:
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute(
+            f"SHOW KEYS FROM `{table}` WHERE Key_name = 'PRIMARY'"
+        )
+        row = cursor.fetchone()
+        return row["Column_name"] if row else None
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+# =========================================================
+# PAGES
 # =========================================================
 
 @app.route("/")
 def home():
 
     if "username" not in session:
-
-        return redirect(
-            url_for("login")
-        )
-
+        return redirect(url_for("login"))
 
     if session.get("role") == "admin":
+        return redirect(url_for("admin_page"))
 
-        return redirect(
-            url_for("admin_dashboard")
-        )
-
-
-    return redirect(
-        url_for("user_dashboard")
-    )
+    return redirect(url_for("user_page"))
 
 
-# =========================================================
-# LOGIN PAGE
-# =========================================================
-
-@app.route(
-    "/login",
-    methods=["GET", "POST"]
-)
+@app.route("/login", methods=["GET", "POST"])
 def login():
-
-    error = None
-
 
     if request.method == "POST":
 
-        username = request.form.get(
-            "username",
-            ""
-        ).strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
 
-        password = request.form.get(
-            "password",
-            ""
-        )
+        user = USERS.get(username)
 
-
-        if (
-            username in USERS
-            and
-            USERS[username]["password"]
-            == password
-        ):
+        if user and user["password"] == password:
 
             session["username"] = username
+            session["role"] = user["role"]
 
-            session["role"] = (
-                USERS[username]["role"]
-            )
+            if user["role"] == "admin":
+                return redirect(url_for("admin_page"))
 
+            return redirect(url_for("user_page"))
 
-            if session["role"] == "admin":
-
-                return redirect(
-                    url_for(
-                        "admin_dashboard"
-                    )
-                )
-
-
-            return redirect(
-                url_for(
-                    "user_dashboard"
-                )
-            )
-
-
-        error = (
-            "Invalid username or password."
+        return render_template(
+            "login.html",
+            error="Invalid username or password."
         )
 
+    return render_template("login.html")
 
-    return render_template(
-        "login.html",
-        error=error
-    )
-
-
-# =========================================================
-# LOGOUT
-# =========================================================
 
 @app.route("/logout")
 def logout():
 
     session.clear()
 
-    return redirect(
-        url_for("login")
-    )
+    return redirect(url_for("login"))
 
-
-# =========================================================
-# ADMIN DASHBOARD
-# =========================================================
 
 @app.route("/admin")
 @admin_required
-def admin_dashboard():
+def admin_page():
 
     return render_template(
-
         "admin.html",
-
-        username=session.get(
-            "username"
-        ),
-
+        username=session.get("username"),
         tables=ALL_TABLES
-
     )
 
 
-# =========================================================
-# USER DASHBOARD
-# =========================================================
-
 @app.route("/user")
 @login_required
-def user_dashboard():
+def user_page():
 
     if session.get("role") != "user":
-
-        return "Access denied", 403
-
+        return redirect(url_for("admin_page"))
 
     return render_template(
-
         "user.html",
-
-        username=session.get(
-            "username"
-        ),
-
+        username=session.get("username"),
         tables=USER_VIEW_TABLES
-
     )
 
 
@@ -390,301 +216,164 @@ def user_dashboard():
 # GET TABLE DATA
 # =========================================================
 
-@app.route(
-    "/api/table/<table>",
-    methods=["GET"]
-)
+@app.route("/api/table/<table_name>", methods=["GET"])
 @login_required
-def api_get_table(table):
+def get_table_data(table_name):
 
-    if not allowed_table(table):
+    if table_name not in ALL_TABLES:
+        return jsonify({"error": "Invalid table."}), 404
 
-        return jsonify({
-            "error": "Invalid table."
-        }), 404
-
-
-    # User permissions
     if (
         session.get("role") == "user"
-        and
-        table not in USER_VIEW_TABLES
+        and table_name not in USER_VIEW_TABLES
     ):
-
         return jsonify({
-            "error": "You do not have permission to access this table."
+            "error": "You do not have permission to view this table."
         }), 403
 
-
-    search = request.args.get(
-        "search",
-        ""
-    ).strip()
-
+    search = request.args.get("search", "").strip()
 
     connection = None
     cursor = None
 
-
     try:
-
         connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
 
-        cursor = connection.cursor(
-            dictionary=True
-        )
+        columns = get_table_columns(table_name)
 
+        query = f"SELECT * FROM `{table_name}`"
+        values = []
 
-        data = get_table_data(
-            cursor,
-            table,
-            search
-        )
+        if search:
 
+            conditions = []
 
-        return jsonify(data)
+            for column in columns:
+                conditions.append(f"CAST(`{column}` AS CHAR) LIKE %s")
+                values.append(f"%{search}%")
 
+            query += " WHERE " + " OR ".join(conditions)
 
-    except Exception as error:
+        query += " LIMIT 500"
 
-        return jsonify({
-            "error": str(error)
-        }), 400
-
-
-    finally:
-
-        if cursor:
-
-            cursor.close()
-
-
-        if connection:
-
-            connection.close()
-
-
-# =========================================================
-# GET TABLE COLUMNS
-# =========================================================
-
-@app.route(
-    "/api/table/<table>/columns",
-    methods=["GET"]
-)
-@login_required
-def api_columns(table):
-
-    if not allowed_table(table):
+        cursor.execute(query, values)
+        rows = cursor.fetchall()
 
         return jsonify({
-            "error": "Invalid table."
-        }), 404
-
-
-    if (
-        session.get("role") == "user"
-        and
-        table not in USER_VIEW_TABLES
-    ):
-
-        return jsonify({
-            "error": "Access denied."
-        }), 403
-
-
-    connection = None
-    cursor = None
-
-
-    try:
-
-        connection = get_connection()
-
-        cursor = connection.cursor(
-            dictionary=True
-        )
-
-
-        columns = get_columns(
-            cursor,
-            table
-        )
-
-
-        return jsonify({
-
-            "columns":
-                columns,
-
-            "primary_key":
-                get_primary_key(
-                    cursor,
-                    table
-                )
-
+            "table": table_name,
+            "columns": columns,
+            "rows": rows
         })
 
-
     except Exception as error:
-
-        return jsonify({
-            "error": str(error)
-        }), 400
-
+        return jsonify({"error": str(error)}), 400
 
     finally:
-
         if cursor:
-
             cursor.close()
-
-
         if connection:
-
             connection.close()
+
+
+# =========================================================
+# TABLE COLUMNS (ADMIN)
+# =========================================================
+
+@app.route("/api/table/<table_name>/columns", methods=["GET"])
+@admin_required
+def table_columns(table_name):
+
+    if table_name not in ALL_TABLES:
+        return jsonify({"error": "Invalid table."}), 404
+
+    try:
+        return jsonify({
+            "columns": get_table_columns(table_name),
+            "primary_key": get_primary_key(table_name)
+        })
+
+    except Exception as error:
+        return jsonify({"error": str(error)}), 400
 
 
 # =========================================================
 # INSERT
 # =========================================================
 
-@app.route(
-    "/api/table/<table>",
-    methods=["POST"]
-)
+@app.route("/api/table/<table_name>", methods=["POST"])
 @admin_required
-def api_insert(table):
+def insert_record(table_name):
 
-    if not allowed_table(table):
+    if table_name not in ALL_TABLES:
+        return jsonify({"error": "Invalid table."}), 404
 
-        return jsonify({
-            "error": "Invalid table."
-        }), 404
+    data = request.get_json(silent=True)
 
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-
-    if not data:
-
-        return jsonify({
-            "error": "No data received."
-        }), 400
-
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON data."}), 400
 
     connection = None
     cursor = None
 
-
     try:
+        columns = get_table_columns(table_name)
+        primary_key = get_primary_key(table_name)
 
-        connection = get_connection()
+        filtered = {}
 
-        cursor = connection.cursor()
+        for column in columns:
 
+            if column not in data:
+                continue
 
-        columns = get_columns(
-            cursor,
-            table
-        )
+            value = data[column]
 
+            if value == "":
+                value = None
 
-        allowed_columns = {
-            column["Field"]
-            for column in columns
-        }
+            filtered[column] = value
 
+        # Do not manually insert an empty auto-increment ID
+        if primary_key in filtered and filtered[primary_key] in (None, ""):
+            del filtered[primary_key]
 
-        clean_data = {
+        if not filtered:
+            return jsonify({"error": "No data provided."}), 400
 
-            key: value
-
-            for key, value in data.items()
-
-            if key in allowed_columns
-            and value != ""
-
-        }
-
-
-        if not clean_data:
-
-            return jsonify({
-                "error": "No valid fields received."
-            }), 400
-
-
-        names = list(
-            clean_data.keys()
-        )
-
-
-        placeholders = ", ".join(
-            ["%s"] * len(names)
-        )
-
+        column_names = list(filtered.keys())
+        placeholders = ", ".join(["%s"] * len(column_names))
+        sql_columns = ", ".join(f"`{c}`" for c in column_names)
 
         query = (
-
-            f"INSERT INTO `{table}` "
-            f"(`"
-            + "`, `".join(names)
-            + "`) VALUES ("
-            + placeholders
-            + ")"
-
+            f"INSERT INTO `{table_name}` ({sql_columns}) "
+            f"VALUES ({placeholders})"
         )
 
+        values = [filtered[c] for c in column_names]
 
-        values = [
-            clean_data[name]
-            for name in names
-        ]
-
-
-        cursor.execute(
-            query,
-            values
-        )
-
-
+        connection = get_connection()
+        cursor = connection.cursor()
+        cursor.execute(query, values)
         connection.commit()
 
-
         return jsonify({
-
             "success": True,
-
-            "message":
-                "Record inserted successfully."
-
+            "message": "Record inserted successfully.",
+            "id": cursor.lastrowid
         })
-
 
     except Exception as error:
 
         if connection:
-
             connection.rollback()
 
-
-        return jsonify({
-            "error": str(error)
-        }), 400
-
+        return jsonify({"error": str(error)}), 400
 
     finally:
-
         if cursor:
-
             cursor.close()
-
-
         if connection:
-
             connection.close()
 
 
@@ -692,158 +381,76 @@ def api_insert(table):
 # UPDATE
 # =========================================================
 
-@app.route(
-    "/api/table/<table>/<path:primary_value>",
-    methods=["PUT"]
-)
+@app.route("/api/table/<table_name>/<record_id>", methods=["PUT"])
 @admin_required
-def api_update(
-    table,
-    primary_value
-):
+def update_record(table_name, record_id):
 
-    if not allowed_table(table):
+    if table_name not in ALL_TABLES:
+        return jsonify({"error": "Invalid table."}), 404
 
-        return jsonify({
-            "error": "Invalid table."
-        }), 404
+    data = request.get_json(silent=True)
 
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON data."}), 400
 
     connection = None
     cursor = None
 
-
     try:
-
-        connection = get_connection()
-
-        cursor = connection.cursor(
-            dictionary=True
-        )
-
-
-        primary_key = get_primary_key(
-            cursor,
-            table
-        )
-
+        columns = get_table_columns(table_name)
+        primary_key = get_primary_key(table_name)
 
         if not primary_key:
+            return jsonify({"error": "Primary key not found."}), 400
 
-            return jsonify({
-                "error":
-                    "No primary key found."
-            }), 400
+        updates = {}
 
+        for column in columns:
 
-        columns = get_columns(
-            cursor,
-            table
-        )
+            if column == primary_key or column not in data:
+                continue
 
+            value = data[column]
 
-        allowed_columns = {
-            column["Field"]
-            for column in columns
-        }
+            if value == "":
+                value = None
 
+            updates[column] = value
 
-        clean_data = {
+        if not updates:
+            return jsonify({"error": "No fields to update."}), 400
 
-            key: value
-
-            for key, value in data.items()
-
-            if key in allowed_columns
-            and key != primary_key
-
-        }
-
-
-        if not clean_data:
-
-            return jsonify({
-                "error":
-                    "No fields to update."
-            }), 400
-
-
-        set_parts = []
-
-        values = []
-
-
-        for column, value in clean_data.items():
-
-            set_parts.append(
-                f"`{column}` = %s"
-            )
-
-            values.append(value)
-
-
-        values.append(
-            primary_value
-        )
-
+        set_clause = ", ".join(f"`{c}` = %s" for c in updates)
 
         query = (
-
-            f"UPDATE `{table}` "
-            f"SET "
-            +
-            ", ".join(set_parts)
-            +
-            f" WHERE `{primary_key}` = %s"
-
+            f"UPDATE `{table_name}` SET {set_clause} "
+            f"WHERE `{primary_key}` = %s"
         )
 
+        values = [updates[c] for c in updates]
+        values.append(record_id)
 
-        cursor.execute(
-            query,
-            values
-        )
-
-
+        connection = get_connection()
+        cursor = connection.cursor()
+        cursor.execute(query, values)
         connection.commit()
 
-
         return jsonify({
-
             "success": True,
-
-            "message":
-                "Record updated successfully."
-
+            "message": "Record updated successfully."
         })
-
 
     except Exception as error:
 
         if connection:
-
             connection.rollback()
 
-
-        return jsonify({
-            "error": str(error)
-        }), 400
-
+        return jsonify({"error": str(error)}), 400
 
     finally:
-
         if cursor:
-
             cursor.close()
-
-
         if connection:
-
             connection.close()
 
 
@@ -851,103 +458,56 @@ def api_update(
 # DELETE
 # =========================================================
 
-@app.route(
-    "/api/table/<table>/<path:primary_value>",
-    methods=["DELETE"]
-)
+@app.route("/api/table/<table_name>/<record_id>", methods=["DELETE"])
 @admin_required
-def api_delete(
-    table,
-    primary_value
-):
+def delete_record(table_name, record_id):
 
-    if not allowed_table(table):
-
-        return jsonify({
-            "error": "Invalid table."
-        }), 404
-
+    if table_name not in ALL_TABLES:
+        return jsonify({"error": "Invalid table."}), 404
 
     connection = None
     cursor = None
 
-
     try:
-
-        connection = get_connection()
-
-        cursor = connection.cursor(
-            dictionary=True
-        )
-
-
-        primary_key = get_primary_key(
-            cursor,
-            table
-        )
-
+        primary_key = get_primary_key(table_name)
 
         if not primary_key:
+            return jsonify({"error": "Primary key not found."}), 400
 
-            return jsonify({
-                "error":
-                    "No primary key found."
-            }), 400
-
-
-        query = (
-
-            f"DELETE FROM `{table}` "
-            f"WHERE `{primary_key}` = %s"
-
-        )
-
+        connection = get_connection()
+        cursor = connection.cursor()
 
         cursor.execute(
-            query,
-            [primary_value]
+            f"DELETE FROM `{table_name}` WHERE `{primary_key}` = %s",
+            (record_id,)
         )
-
 
         connection.commit()
 
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Record not found."}), 404
 
         return jsonify({
-
             "success": True,
-
-            "message":
-                "Record deleted successfully."
-
+            "message": "Record deleted successfully."
         })
-
 
     except Exception as error:
 
         if connection:
-
             connection.rollback()
 
-
-        return jsonify({
-            "error": str(error)
-        }), 400
-
+        return jsonify({"error": str(error)}), 400
 
     finally:
-
         if cursor:
-
             cursor.close()
-
-
         if connection:
-
             connection.close()
 
 
 # =========================================================
-# DASHBOARD / AI
+# DASHBOARD + AI DATA
 # =========================================================
 
 @app.route("/api/dashboard")
@@ -957,317 +517,66 @@ def dashboard_data():
     connection = None
     cursor = None
 
-
     try:
-
         connection = get_connection()
-
-        cursor = connection.cursor(
-            dictionary=True
-        )
-
-
-        # =================================================
-        # ORDER STATUS
-        # =================================================
+        cursor = connection.cursor(dictionary=True)
 
         cursor.execute("""
-
-            SELECT
-
-                status,
-
-                COUNT(*) AS count
-
+            SELECT status, COUNT(*) AS count
             FROM orders
-
             GROUP BY status
-
             ORDER BY count DESC
-
         """)
-
-
-        order_status = (
-            cursor.fetchall()
-        )
-
-
-        # =================================================
-        # INVENTORY CATEGORY
-        # =================================================
+        order_status = cursor.fetchall()
 
         cursor.execute("""
-
-            SELECT
-
-                category,
-
-                SUM(quantity) AS quantity
-
+            SELECT category, SUM(quantity) AS quantity
             FROM inventory
-
             GROUP BY category
-
             ORDER BY quantity DESC
-
         """)
-
-
-        inventory_category = (
-            cursor.fetchall()
-        )
-
-
-        # Convert inventory numbers
-
-        for row in inventory_category:
-
-            row["quantity"] = int(
-                row["quantity"] or 0
-            )
-
-
-        # =================================================
-        # SALES TREND
-        # =================================================
+        inventory_category = cursor.fetchall()
 
         cursor.execute("""
-
             SELECT
-
-                DATE(order_date) AS order_date,
-
-                SUM(total_amount) AS sales,
-
-                COUNT(*) AS orders
-
-            FROM orders
-
-            GROUP BY DATE(order_date)
-
-            ORDER BY DATE(order_date)
-
-        """)
-
-
-        sales_trend = (
-            cursor.fetchall()
-        )
-
-
-        for row in sales_trend:
-
-            if row["order_date"]:
-
-                row["order_date"] = str(
-                    row["order_date"]
-                )
-
-
-            row["sales"] = float(
-                row["sales"] or 0
-            )
-
-
-            row["orders"] = int(
-                row["orders"] or 0
-            )
-
-
-        # =================================================
-        # SALES BY STATUS
-        # =================================================
-
-        cursor.execute("""
-
-            SELECT
-
-                status,
-
-                COUNT(*) AS order_count,
-
-                SUM(total_amount) AS sales
-
-            FROM orders
-
-            GROUP BY status
-
-            ORDER BY sales DESC
-
-        """)
-
-
-        sales_by_status = (
-            cursor.fetchall()
-        )
-
-
-        for row in sales_by_status:
-
-            row["order_count"] = int(
-                row["order_count"] or 0
-            )
-
-
-            row["sales"] = float(
-                row["sales"] or 0
-            )
-
-
-        # =================================================
-        # SUMMARY
-        # =================================================
-
-        cursor.execute("""
-
-            SELECT
-
                 COUNT(*) AS total_orders,
-
-                COALESCE(
-                    SUM(total_amount),
-                    0
-                ) AS total_sales,
-
-                COALESCE(
-                    AVG(total_amount),
-                    0
-                ) AS average_order,
-
-                COALESCE(
-                    MAX(total_amount),
-                    0
-                ) AS highest_order,
-
-                COALESCE(
-                    MIN(total_amount),
-                    0
-                ) AS lowest_order
-
+                COALESCE(SUM(total_amount), 0) AS total_sales,
+                COALESCE(AVG(total_amount), 0) AS average_order,
+                COALESCE(MAX(total_amount), 0) AS highest_order,
+                COALESCE(MIN(total_amount), 0) AS lowest_order
             FROM orders
-
         """)
-
-
         summary = cursor.fetchone()
 
-
-        summary["total_orders"] = int(
-            summary["total_orders"] or 0
-        )
-
-
-        summary["total_sales"] = float(
-            summary["total_sales"] or 0
-        )
-
-
-        summary["average_order"] = float(
-            summary["average_order"] or 0
-        )
-
-
-        summary["highest_order"] = float(
-            summary["highest_order"] or 0
-        )
-
-
-        summary["lowest_order"] = float(
-            summary["lowest_order"] or 0
-        )
-
-
-        # =================================================
-        # ORDERS FOR AI
-        # =================================================
-
         cursor.execute("""
-
-            SELECT
-
-                order_id,
-
-                order_date,
-
-                total_amount,
-
-                status
-
+            SELECT order_id, order_date, total_amount, status
             FROM orders
-
             ORDER BY order_id
-
         """)
-
-
         orders = cursor.fetchall()
 
-
-        # =================================================
-        # AI
-        # =================================================
-
-        ai_result = analyze_sales(
-            orders
-        )
-
-
-        # =================================================
-        # RETURN
-        # =================================================
+        ai_result = analyze_sales(orders)
 
         return jsonify({
-
-            "order_status":
-                order_status,
-
-            "inventory_category":
-                inventory_category,
-
-            "sales_trend":
-                sales_trend,
-
-            "sales_by_status":
-                sales_by_status,
-
-            "summary":
-                summary,
-
-            "ai":
-                ai_result
-
+            "order_status": order_status,
+            "inventory_category": inventory_category,
+            "summary": summary,
+            "ai": ai_result
         })
 
-
     except Exception as error:
-
-        return jsonify({
-
-            "error":
-                str(error)
-
-        }), 400
-
+        return jsonify({"error": str(error)}), 400
 
     finally:
-
         if cursor:
-
             cursor.close()
-
-
         if connection:
-
             connection.close()
 
 
 # =========================================================
-# RUN
+# RUN (local only; Render uses gunicorn app:app)
 # =========================================================
 
 if __name__ == "__main__":
-
-    app.run(
-        debug=True
-    )
+    app.run()
