@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        AI Business Management System
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+
+<body class="login-body">
+
+    <div class="cursor-glow"></div>
+
+
+    <div class="login-container">
+
+        <div class="login-card">
+
+            <div class="logo-circle">
+                AI
+            </div>
+
+
+            <h1>
+                AI Business
+            </h1>
+
+            <h2>
+                Management System
+            </h2>
+
+
+            <p class="login-description">
+
+                Intelligent business management
+                and analysis platform
+
+            </p>
+
+
+            {% if error %}
+
+            <div class="error-message">
+
+                {{ error }}
+
+            </div>
+
+            {% endif %}
+
+
+            <form
+                method="POST"
+                action="{{ url_for('login') }}"
+            >
+
+                <div class="input-group">
+
+                    <label>
+                        Username
+                    </label>
+
+                    <input
+                        type="text"
+                        name="username"
+                        placeholder="Enter username"
+                        required
+                    >
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>
+                        Password
+                    </label>
+
+                    <input
+                        type="password"
+                        name="password"
+                        placeholder="Enter password"
+                        required
+                    >
+
+                </div>
+
+
+                <button
+                    type="submit"
+                    class="neon-button login-button"
+                >
+                    Login
+                </button>
+
+            </form>
+
+
+            <div class="login-info">
+
+                <p>
+                    Admin: admin / admin123
+                </p>
+
+                <p>
+                    User: user / user123
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <script
+        src="{{ url_for('static', filename='app.js') }}"
+    ></script>
+
+</body>
+
+</html>

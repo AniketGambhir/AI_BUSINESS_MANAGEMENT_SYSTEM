@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+
+ai_business_management_system_backup.sql
+ai_business_management_system_clean.sql
+
+backup_database.py
+clean_backup.py
+import_database.py
+migrate_to_railway.py
+
+.env
