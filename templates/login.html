@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI Business Management System</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="login-page">
+
+<div class="cursor-glow"></div>
+
+<div class="login-layout">
+
+    <section class="login-intro">
+
+        <div class="login-logo">
+            AI
+        </div>
+
+        <p class="eyebrow">
+            INTELLIGENT BUSINESS PLATFORM
+        </p>
+
+        <h1>
+            AI Business<br>
+            <span>Management System</span>
+        </h1>
+
+        <p class="login-description">
+            Analyze business performance, monitor operations,
+            visualize data and generate intelligent business insights
+            from your management database.
+        </p>
+
+        <div class="login-features">
+
+            <div>
+                <span>◈</span>
+                Real-time Business Analytics
+            </div>
+
+            <div>
+                <span>◈</span>
+                AI Business Health Score
+            </div>
+
+            <div>
+                <span>◈</span>
+                Interactive Data Visualization
+            </div>
+
+            <div>
+                <span>◈</span>
+                Role Based Access Control
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section class="login-panel">
+
+        <div class="login-card">
+
+            <div class="login-card-header">
+
+                <div class="mini-logo">
+                    AI
+                </div>
+
+                <h2>Welcome Back</h2>
+
+                <p>
+                    Sign in to access your business dashboard.
+                </p>
+
+            </div>
+
+
+            {% if error %}
+
+            <div class="login-error">
+                {{ error }}
+            </div>
+
+            {% endif %}
+
+
+            <form
+                method="POST"
+                action="{{ url_for('login') }}"
+                class="login-form"
+            >
+
+                <label>
+                    Username
+                </label>
+
+                <input
+                    type="text"
+                    name="username"
+                    placeholder="Enter username"
+                    required
+                >
+
+
+                <label>
+                    Password
+                </label>
+
+                <input
+                    type="password"
+                    name="password"
+                    placeholder="Enter password"
+                    required
+                >
+
+
+                <button
+                    type="submit"
+                    class="login-button"
+                >
+                    Enter Dashboard
+                    <span>→</span>
+                </button>
+
+            </form>
+
+
+            <div class="demo-access">
+
+                <p>Demo Access</p>
+
+                <div class="demo-grid">
+
+                    <div>
+                        <strong>ADMIN</strong>
+                        <span>admin / Admin@123</span>
+                    </div>
+
+                    <div>
+                        <strong>USER</strong>
+                        <span>user / User@123</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</div>
+
+</body>
+</html>

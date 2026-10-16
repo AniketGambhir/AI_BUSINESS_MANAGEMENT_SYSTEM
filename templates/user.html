@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>User Dashboard - AI Business Management</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+<div class="cursor-glow"></div>
+
+<div class="app-shell">
+
+    <aside class="sidebar">
+
+        <div class="sidebar-header">
+
+            <div class="brand-logo">
+                AI
+            </div>
+
+            <div>
+                <div class="brand-title">
+                    Business AI
+                </div>
+
+                <div class="brand-subtitle">
+                    Management System
+                </div>
+            </div>
+
+        </div>
+
+
+        <nav class="sidebar-nav">
+
+            <div class="nav-label">
+                OVERVIEW
+            </div>
+
+            <button
+                class="nav-item active"
+                data-section="dashboard"
+            >
+                <span>◈</span>
+                Dashboard
+            </button>
+
+
+            <div class="nav-label">
+                AVAILABLE DATA
+            </div>
+
+            <button
+                class="nav-item"
+                data-table="customer"
+            >
+                <span>♙</span>
+                Customers
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="orders"
+            >
+                <span>▣</span>
+                Orders
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="product"
+            >
+                <span>◆</span>
+                Products
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="project"
+            >
+                <span>◇</span>
+                Projects
+            </button>
+
+        </nav>
+
+
+        <div class="sidebar-footer">
+
+            <div class="profile-card">
+
+                <div class="profile-avatar">
+                    {{ username[0]|upper }}
+                </div>
+
+                <div class="profile-info">
+
+                    <strong>
+                        {{ username }}
+                    </strong>
+
+                    <span>
+                        User
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <a
+                href="{{ url_for('logout') }}"
+                class="logout-button"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </aside>
+
+
+    <main class="main-content">
+
+        <header class="topbar">
+
+            <div>
+
+                <p class="topbar-label">
+                    BUSINESS ANALYTICS
+                </p>
+
+                <h1 id="page-title">
+                    Business Dashboard
+                </h1>
+
+            </div>
+
+            <div class="topbar-right">
+
+                <div class="live-status">
+                    <span></span>
+                    Live Database
+                </div>
+
+                <div class="role-badge user">
+                    USER
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <section
+            id="dashboard-section"
+            class="dashboard-content"
+        >
+
+            <div class="stats-grid">
+
+                <div class="stat-card blue">
+
+                    <div class="stat-icon">
+                        ▣
+                    </div>
+
+                    <div>
+                        <p>Total Orders</p>
+                        <h2 id="total-orders">0</h2>
+                        <small>Available orders</small>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card purple">
+
+                    <div class="stat-icon">
+                        ₹
+                    </div>
+
+                    <div>
+                        <p>Total Sales</p>
+                        <h2 id="total-sales">₹0</h2>
+                        <small>Recorded order value</small>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card cyan">
+
+                    <div class="stat-icon">
+                        AVG
+                    </div>
+
+                    <div>
+                        <p>Average Order</p>
+                        <h2 id="average-order">₹0</h2>
+                        <small>Average order value</small>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card pink">
+
+                    <div class="stat-icon">
+                        MAX
+                    </div>
+
+                    <div>
+                        <p>Highest Order</p>
+                        <h2 id="highest-order">₹0</h2>
+                        <small>Largest order</small>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="count-grid">
+
+                <div class="count-card">
+                    <span>Customers</span>
+                    <strong id="count-customer">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Products</span>
+                    <strong id="count-product">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Projects</span>
+                    <strong id="count-project">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Orders</span>
+                    <strong id="count-orders">0</strong>
+                </div>
+
+            </div>
+
+
+            <!-- AI USER ANALYSIS -->
+
+            <section class="ai-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="section-kicker">
+                            AI INSIGHTS
+                        </p>
+
+                        <h2>
+                            Business Performance Analysis
+                        </h2>
+
+                        <p>
+                            Intelligent analysis of the business data
+                            available to your account.
+                        </p>
+
+                    </div>
+
+                    <div class="ai-badge">
+                        AI ANALYTICS
+                    </div>
+
+                </div>
+
+
+                <div class="ai-overview">
+
+                    <div class="health-card">
+
+                        <div class="health-ring">
+
+                            <div>
+                                <strong id="health-score">
+                                    0
+                                </strong>
+
+                                <span>/100</span>
+                            </div>
+
+                        </div>
+
+                        <p class="health-label">
+                            BUSINESS SCORE
+                        </p>
+
+                        <h3 id="business-level">
+                            Analysing...
+                        </h3>
+
+                        <p id="ai-summary">
+                            Loading analysis...
+                        </p>
+
+                    </div>
+
+
+                    <div class="ai-score-grid">
+
+                        <div class="score-card">
+                            <span>Sales</span>
+                            <strong id="score-sales">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Orders</span>
+                            <strong id="score-orders">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Customers</span>
+                            <strong id="score-customers">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Products</span>
+                            <strong id="score-products">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Projects</span>
+                            <strong id="score-projects">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="analysis-grid">
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>₹</span>
+                            Sales Analysis
+                        </div>
+
+                        <p id="explain-sales">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>▣</span>
+                            Order Analysis
+                        </div>
+
+                        <p id="explain-orders">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>♙</span>
+                            Customer Analysis
+                        </div>
+
+                        <p id="explain-customers">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>◆</span>
+                            Product Analysis
+                        </div>
+
+                        <p id="explain-products">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>◇</span>
+                            Project Analysis
+                        </div>
+
+                        <p id="explain-projects">
+                            Loading...
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="recommendation-box">
+
+                    <div class="recommendation-heading">
+
+                        <span>✦</span>
+
+                        <div>
+                            <h3>AI Recommendations</h3>
+                            <p>
+                                Suggested actions based on the current
+                                business data.
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="recommendations"
+                        class="recommendations"
+                    >
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- CHARTS -->
+
+            <section class="visual-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="section-kicker">
+                            DATA VISUALIZATION
+                        </p>
+
+                        <h2>
+                            Business Graphs
+                        </h2>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-grid">
+
+                    <div class="chart-card large">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Monthly Sales</h3>
+                                <p>Sales trend</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="monthlySalesChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Order Status</h3>
+                                <p>Order distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="orderStatusChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Products</h3>
+                                <p>Product distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="productChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Customers</h3>
+                                <p>Customer activity</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="customerChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Projects</h3>
+                                <p>Project status</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="projectChart"></canvas>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="recent-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="section-kicker">
+                            DATABASE
+                        </p>
+
+                        <h2>
+                            Recent Orders
+                        </h2>
+
+                    </div>
+
+                </div>
+
+                <div
+                    id="recent-orders"
+                    class="recent-orders"
+                >
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <!-- USER TABLE -->
+
+        <section
+            id="table-section"
+            class="table-section hidden"
+        >
+
+            <div class="section-heading">
+
+                <div>
+
+                    <p class="section-kicker">
+                        READ ONLY
+                    </p>
+
+                    <h2 id="table-title">
+                        Table
+                    </h2>
+
+                    <p id="table-description">
+                        Read-only database records
+                    </p>
+
+                </div>
+
+                <div class="readonly-badge">
+                    READ ONLY
+                </div>
+
+            </div>
+
+
+            <div class="table-toolbar">
+
+                <input
+                    id="table-search"
+                    type="text"
+                    placeholder="Search records..."
+                >
+
+                <button
+                    id="refresh-table"
+                    class="secondary-button"
+                >
+                    Refresh
+                </button>
+
+            </div>
+
+
+            <div
+                id="data-table-container"
+                class="data-table-container"
+            >
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<div id="toast" class="toast"></div>
+
+
+<script>
+
+    window.APP_ROLE = "user";
+
+</script>
+
+<script
+    src="{{ url_for('static', filename='app.js') }}"
+></script>
+
+</body>
+</html>

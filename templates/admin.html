@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Admin Dashboard - AI Business Management</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+<div class="cursor-glow"></div>
+
+<div class="app-shell">
+
+    <aside class="sidebar">
+
+        <div class="sidebar-header">
+
+            <div class="brand-logo">
+                AI
+            </div>
+
+            <div>
+                <div class="brand-title">
+                    Business AI
+                </div>
+
+                <div class="brand-subtitle">
+                    Management System
+                </div>
+            </div>
+
+        </div>
+
+
+        <nav class="sidebar-nav">
+
+            <div class="nav-label">
+                OVERVIEW
+            </div>
+
+            <button
+                class="nav-item active"
+                data-section="dashboard"
+            >
+                <span>◈</span>
+                Dashboard
+            </button>
+
+
+            <div class="nav-label">
+                MANAGEMENT
+            </div>
+
+            <button
+                class="nav-item"
+                data-table="customer"
+            >
+                <span>♙</span>
+                Customers
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="orders"
+            >
+                <span>▣</span>
+                Orders
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="product"
+            >
+                <span>◆</span>
+                Products
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="inventory"
+            >
+                <span>▦</span>
+                Inventory
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="employee"
+            >
+                <span>♟</span>
+                Employees
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="project"
+            >
+                <span>◇</span>
+                Projects
+            </button>
+
+            <button
+                class="nav-item"
+                data-table="invoice"
+            >
+                <span>▤</span>
+                Invoices
+            </button>
+
+        </nav>
+
+
+        <div class="sidebar-footer">
+
+            <div class="profile-card">
+
+                <div class="profile-avatar">
+                    {{ username[0]|upper }}
+                </div>
+
+                <div class="profile-info">
+
+                    <strong>
+                        {{ username }}
+                    </strong>
+
+                    <span>
+                        Administrator
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <a
+                href="{{ url_for('logout') }}"
+                class="logout-button"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </aside>
+
+
+    <main class="main-content">
+
+        <header class="topbar">
+
+            <div>
+
+                <p class="topbar-label">
+                    ADMIN CONTROL CENTER
+                </p>
+
+                <h1 id="page-title">
+                    Business Dashboard
+                </h1>
+
+            </div>
+
+
+            <div class="topbar-right">
+
+                <div class="live-status">
+                    <span></span>
+                    Live Database
+                </div>
+
+                <div class="role-badge admin">
+                    ADMIN
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <section
+            id="dashboard-section"
+            class="dashboard-content"
+        >
+
+            <!-- STATISTICS -->
+
+            <div class="stats-grid">
+
+                <div class="stat-card blue">
+
+                    <div class="stat-icon">
+                        ▣
+                    </div>
+
+                    <div>
+                        <p>Total Orders</p>
+                        <h2 id="total-orders">0</h2>
+                        <small>All recorded orders</small>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card purple">
+
+                    <div class="stat-icon">
+                        ₹
+                    </div>
+
+                    <div>
+                        <p>Total Sales</p>
+                        <h2 id="total-sales">₹0</h2>
+                        <small>Total order value</small>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card cyan">
+
+                    <div class="stat-icon">
+                        AVG
+                    </div>
+
+                    <div>
+                        <p>Average Order</p>
+                        <h2 id="average-order">₹0</h2>
+                        <small>Average order value</small>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card pink">
+
+                    <div class="stat-icon">
+                        MAX
+                    </div>
+
+                    <div>
+                        <p>Highest Order</p>
+                        <h2 id="highest-order">₹0</h2>
+                        <small>Largest recorded order</small>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- COUNT CARDS -->
+
+            <div class="count-grid">
+
+                <div class="count-card">
+                    <span>Customers</span>
+                    <strong id="count-customer">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Products</span>
+                    <strong id="count-product">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Inventory</span>
+                    <strong id="count-inventory">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Employees</span>
+                    <strong id="count-employee">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Projects</span>
+                    <strong id="count-project">0</strong>
+                </div>
+
+                <div class="count-card">
+                    <span>Invoices</span>
+                    <strong id="count-invoice">0</strong>
+                </div>
+
+            </div>
+
+
+            <!-- AI BUSINESS ANALYSIS -->
+
+            <section class="ai-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="section-kicker">
+                            INTELLIGENT ANALYSIS
+                        </p>
+
+                        <h2>
+                            AI Business Analysis
+                        </h2>
+
+                        <p>
+                            AI-generated performance analysis based
+                            on your business database.
+                        </p>
+
+                    </div>
+
+                    <div class="ai-badge">
+                        AI ANALYTICS
+                    </div>
+
+                </div>
+
+
+                <div class="ai-overview">
+
+                    <div class="health-card">
+
+                        <div class="health-ring">
+
+                            <div>
+                                <strong id="health-score">
+                                    0
+                                </strong>
+
+                                <span>/100</span>
+                            </div>
+
+                        </div>
+
+                        <p class="health-label">
+                            BUSINESS HEALTH
+                        </p>
+
+                        <h3 id="business-level">
+                            Analysing...
+                        </h3>
+
+                        <p id="ai-summary">
+                            Loading AI business analysis...
+                        </p>
+
+                    </div>
+
+
+                    <div class="ai-score-grid">
+
+                        <div class="score-card">
+                            <span>Sales</span>
+                            <strong id="score-sales">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Orders</span>
+                            <strong id="score-orders">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Customers</span>
+                            <strong id="score-customers">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Products</span>
+                            <strong id="score-products">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Inventory</span>
+                            <strong id="score-inventory">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Invoices</span>
+                            <strong id="score-invoices">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Employees</span>
+                            <strong id="score-employees">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                        <div class="score-card">
+                            <span>Projects</span>
+                            <strong id="score-projects">0</strong>
+                            <small>/100</small>
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- DETAILED EXPLANATIONS -->
+
+                <div class="analysis-grid">
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>₹</span>
+                            Sales Performance
+                        </div>
+
+                        <p id="explain-sales">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>▣</span>
+                            Order Analysis
+                        </div>
+
+                        <p id="explain-orders">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>♙</span>
+                            Customer Analysis
+                        </div>
+
+                        <p id="explain-customers">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>◆</span>
+                            Product Analysis
+                        </div>
+
+                        <p id="explain-products">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>▦</span>
+                            Inventory Analysis
+                        </div>
+
+                        <p id="explain-inventory">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>▤</span>
+                            Invoice Analysis
+                        </div>
+
+                        <p id="explain-invoices">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>♟</span>
+                            Employee Analysis
+                        </div>
+
+                        <p id="explain-employees">
+                            Loading...
+                        </p>
+
+                    </div>
+
+
+                    <div class="analysis-card">
+
+                        <div class="analysis-card-title">
+                            <span>◇</span>
+                            Project Analysis
+                        </div>
+
+                        <p id="explain-projects">
+                            Loading...
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <!-- RECOMMENDATIONS -->
+
+                <div class="recommendation-box">
+
+                    <div class="recommendation-heading">
+
+                        <span>✦</span>
+
+                        <div>
+                            <h3>AI Recommendations</h3>
+                            <p>
+                                Recommended actions based on current
+                                business conditions.
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div
+                        id="recommendations"
+                        class="recommendations"
+                    >
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- CHARTS -->
+
+            <section class="visual-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="section-kicker">
+                            BUSINESS VISUALIZATION
+                        </p>
+
+                        <h2>
+                            Interactive Analytics
+                        </h2>
+
+                    </div>
+
+                </div>
+
+
+                <div class="chart-grid">
+
+                    <div class="chart-card large">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Monthly Sales</h3>
+                                <p>Sales trend over time</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="monthlySalesChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Order Status</h3>
+                                <p>Order distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="orderStatusChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Product Performance</h3>
+                                <p>Product records</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="productChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Customer Activity</h3>
+                                <p>Customer distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="customerChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Project Status</h3>
+                                <p>Project distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="projectChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card admin-chart">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Inventory Categories</h3>
+                                <p>Inventory distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="inventoryChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card admin-chart">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Invoice Status</h3>
+                                <p>Payment distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="invoiceChart"></canvas>
+                        </div>
+
+                    </div>
+
+
+                    <div class="chart-card admin-chart">
+
+                        <div class="chart-header">
+                            <div>
+                                <h3>Employee Departments</h3>
+                                <p>Workforce distribution</p>
+                            </div>
+                        </div>
+
+                        <div class="chart-body">
+                            <canvas id="employeeChart"></canvas>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- RECENT ORDERS -->
+
+            <section class="recent-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <p class="section-kicker">
+                            DATABASE
+                        </p>
+
+                        <h2>
+                            Recent Orders
+                        </h2>
+
+                    </div>
+
+                </div>
+
+                <div
+                    id="recent-orders"
+                    class="recent-orders"
+                >
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <!-- TABLE SECTION -->
+
+        <section
+            id="table-section"
+            class="table-section hidden"
+        >
+
+            <div class="section-heading">
+
+                <div>
+
+                    <p class="section-kicker">
+                        DATA MANAGEMENT
+                    </p>
+
+                    <h2 id="table-title">
+                        Table
+                    </h2>
+
+                    <p id="table-description">
+                        Database records
+                    </p>
+
+                </div>
+
+                <button
+                    id="add-record-button"
+                    class="primary-button"
+                >
+                    + Add Record
+                </button>
+
+            </div>
+
+
+            <div class="table-toolbar">
+
+                <input
+                    id="table-search"
+                    type="text"
+                    placeholder="Search records..."
+                >
+
+                <button
+                    id="refresh-table"
+                    class="secondary-button"
+                >
+                    Refresh
+                </button>
+
+            </div>
+
+
+            <div
+                id="data-table-container"
+                class="data-table-container"
+            >
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<!-- MODAL -->
+
+<div
+    id="modal"
+    class="modal hidden"
+>
+
+    <div class="modal-overlay"></div>
+
+    <div class="modal-card">
+
+        <div class="modal-header">
+
+            <div>
+
+                <p class="section-kicker">
+                    DATABASE RECORD
+                </p>
+
+                <h2 id="modal-title">
+                    Add Record
+                </h2>
+
+            </div>
+
+            <button
+                id="modal-close"
+                class="modal-close"
+            >
+                ×
+            </button>
+
+        </div>
+
+
+        <form id="record-form">
+
+            <div
+                id="form-fields"
+                class="form-fields"
+            >
+            </div>
+
+
+            <div class="modal-actions">
+
+                <button
+                    type="button"
+                    id="modal-cancel"
+                    class="secondary-button"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="primary-button"
+                >
+                    Save Record
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<div
+    id="toast"
+    class="toast"
+>
+</div>
+
+
+<script>
+
+    window.APP_ROLE = "admin";
+
+</script>
+
+<script
+    src="{{ url_for('static', filename='app.js') }}"
+></script>
+
+</body>
+</html>
