@@ -2,85 +2,68 @@
 <html lang="en">
 
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>AI Business Management System</title>
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>
+        AI Business Management System
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
 </head>
 
 <body class="login-page">
 
-<div class="cursor-glow"></div>
+    <div class="login-container">
 
-<div class="login-layout">
+        <section class="login-brand">
 
-    <section class="login-intro">
-
-        <div class="login-logo">
-            AI
-        </div>
-
-        <p class="eyebrow">
-            INTELLIGENT BUSINESS PLATFORM
-        </p>
-
-        <h1>
-            AI Business<br>
-            <span>Management System</span>
-        </h1>
-
-        <p class="login-description">
-            Analyze business performance, monitor operations,
-            visualize data and generate intelligent business insights
-            from your management database.
-        </p>
-
-        <div class="login-features">
-
-            <div>
-                <span>◈</span>
-                Real-time Business Analytics
+            <div class="login-logo">
+                AI
             </div>
 
-            <div>
-                <span>◈</span>
-                AI Business Health Score
-            </div>
+            <h1>
+                AI Business
+                <br>
+                Management System
+            </h1>
 
-            <div>
-                <span>◈</span>
-                Interactive Data Visualization
-            </div>
+            <p>
+                Intelligent business management,
+                analytics and decision support.
+            </p>
 
-            <div>
-                <span>◈</span>
-                Role Based Access Control
-            </div>
+            <div class="login-features">
 
-        </div>
+                <span>Business Analytics</span>
 
-    </section>
+                <span>AI Insights</span>
 
-
-    <section class="login-panel">
-
-        <div class="login-card">
-
-            <div class="login-card-header">
-
-                <div class="mini-logo">
-                    AI
-                </div>
-
-                <h2>Welcome Back</h2>
-
-                <p>
-                    Sign in to access your business dashboard.
-                </p>
+                <span>Database Management</span>
 
             </div>
+
+        </section>
+
+
+        <section class="login-card">
+
+            <h2>
+                Welcome Back
+            </h2>
+
+            <p class="login-subtitle">
+                Sign in to continue
+            </p>
 
 
             {% if error %}
@@ -95,39 +78,55 @@
             <form
                 method="POST"
                 action="{{ url_for('login') }}"
-                class="login-form"
             >
 
-                <label>
-                    Username
-                </label>
+                <div class="form-group">
 
-                <input
-                    type="text"
-                    name="username"
-                    placeholder="Enter username"
-                    required
-                >
+                    <label
+                        class="form-label"
+                        for="username"
+                    >
+                        Username
+                    </label>
+
+                    <input
+                        class="form-input"
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Enter username"
+                        required
+                    >
+
+                </div>
 
 
-                <label>
-                    Password
-                </label>
+                <div class="form-group">
 
-                <input
-                    type="password"
-                    name="password"
-                    placeholder="Enter password"
-                    required
-                >
+                    <label
+                        class="form-label"
+                        for="password"
+                    >
+                        Password
+                    </label>
+
+                    <input
+                        class="form-input"
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Enter password"
+                        required
+                    >
+
+                </div>
 
 
                 <button
+                    class="btn btn-primary login-button"
                     type="submit"
-                    class="login-button"
                 >
-                    Enter Dashboard
-                    <span>→</span>
+                    Sign In
                 </button>
 
             </form>
@@ -135,29 +134,26 @@
 
             <div class="demo-access">
 
-                <p>Demo Access</p>
+                <strong>
+                    Demo Access
+                </strong>
 
-                <div class="demo-grid">
+                <p>
+                    Admin:
+                    <b>admin / Admin@123</b>
+                </p>
 
-                    <div>
-                        <strong>ADMIN</strong>
-                        <span>admin / Admin@123</span>
-                    </div>
-
-                    <div>
-                        <strong>USER</strong>
-                        <span>user / User@123</span>
-                    </div>
-
-                </div>
+                <p>
+                    User:
+                    <b>user / User@123</b>
+                </p>
 
             </div>
 
-        </div>
+        </section>
 
-    </section>
-
-</div>
+    </div>
 
 </body>
+
 </html>

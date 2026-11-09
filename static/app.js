@@ -1,408 +1,644 @@
-let dashboardData = null;
-let currentTable = null;
+/* =========================================================
+   AI BUSINESS MANAGEMENT SYSTEM
+   Main Dashboard JavaScript
+   ========================================================= */
+
+"use strict";
+
+/* =========================================================
+   GLOBAL VARIABLES
+   ========================================================= */
+
+let dashboardData = {};
+let aiData = {};
+let currentTable = "";
+let currentRows = [];
 let currentColumns = [];
-let currentPrimaryKey = null;
-let editingId = null;
+let currentPage = 1;
+let rowsPerPage = 10;
 
 const charts = {};
 
-const chartColors = [
-    "#8b5cf6",
-    "#3b82f6",
-    "#06b6d4",
-    "#ec4899",
-    "#22c55e",
-    "#f59e0b",
-    "#ef4444",
-    "#14b8a6",
-    "#6366f1",
-    "#a855f7"
-];
 
+/* =========================================================
+   DOM HELPERS
+   ========================================================= */
 
-document.addEventListener("DOMContentLoaded", () => {
+function $(id) {
+    return document.getElementById(id);
+}
 
-    setupCursorGlow();
-    setupNavigation();
-    setupTableControls();
+function exists(id) {
+    return $(id) !== null;
+}
 
-    loadDashboard();
+function safeArray(value) {
+    return Array.isArray(value) ? value : [];
+}
 
-});
+function safeObject(value) {
+    return value && typeof value === "object" ? value : {};
+}
 
+function escapeHTML(value) {
+    if (value === null || value === undefined) {
+        return "";
+    }
 
-/* ============================================================
-   CURSOR
-============================================================ */
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
-function setupCursorGlow() {
+function formatNumber(value) {
+    const number = Number(value);
 
-    const glow = document.querySelector(".cursor-glow");
+    if (!Number.isFinite(number)) {
+        return "0";
+    }
 
-    if (!glow) return;
+    return number.toLocaleString("en-IN");
+}
 
-    document.addEventListener("mousemove", (event) => {
+function formatCurrency(value) {
+    const number = Number(value);
 
-        glow.style.left = `${event.clientX}px`;
-        glow.style.top = `${event.clientY}px`;
+    if (!Number.isFinite(number)) {
+        return "₹0";
+    }
 
+    return "₹" + number.toLocaleString("en-IN", {
+        maximumFractionDigits: 2
     });
+}
 
+function formatDate(value) {
+    if (!value) {
+        return "-";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
+    return date.toLocaleDateString("en-IN");
+}
+
+function capitalize(value) {
+    if (!value) {
+        return "";
+    }
+
+    return String(value)
+        .charAt(0)
+        .toUpperCase() + String(value).slice(1);
 }
 
 
-/* ============================================================
-   NAVIGATION
-============================================================ */
+/* =========================================================
+   API HELPER
+   ========================================================= */
 
-function setupNavigation() {
-
-    document.querySelectorAll(".nav-item").forEach(item => {
-
-        item.addEventListener("click", () => {
-
-            document.querySelectorAll(".nav-item")
-                .forEach(nav => nav.classList.remove("active"));
-
-            item.classList.add("active");
-
-            const table = item.dataset.table;
-
-            if (table) {
-
-                openTable(table);
-
-            } else {
-
-                showDashboard();
-
-            }
-
+async function apiRequest(url, options = {}) {
+    try {
+        const response = await fetch(url, {
+            headers: {
+                "Content-Type": "application/json",
+                ...(options.headers || {})
+            },
+            ...options
         });
 
-    });
+        let data;
 
-}
-
-
-function showDashboard() {
-
-    document
-        .getElementById("dashboard-section")
-        ?.classList.remove("hidden");
-
-    document
-        .getElementById("table-section")
-        ?.classList.add("hidden");
-
-    const title = document.getElementById("page-title");
-
-    if (title) {
-        title.textContent = "Business Dashboard";
-    }
-
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
-}
-
-
-/* ============================================================
-   DASHBOARD
-============================================================ */
-
-async function loadDashboard() {
-
-    try {
-
-        const response = await fetch(
-            "/api/dashboard"
-        );
-
-        const json = await response.json();
-
-        if (!json.success) {
-
-            showToast(
-                json.error || "Dashboard error",
-                "error"
-            );
-
-            return;
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
         }
 
-        dashboardData = json.data;
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                data.message ||
+                `Request failed with status ${response.status}`
+            );
+        }
 
-        renderStatistics(
-            dashboardData
-        );
-
-        renderAI(
-            dashboardData.ai
-        );
-
-        renderCharts(
-            dashboardData.charts
-        );
-
-        renderRecentOrders(
-            dashboardData.recent_orders
-        );
+        return data;
 
     } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Unable to load dashboard",
-            "error"
-        );
-
+        console.error("API ERROR:", url, error);
+        throw error;
     }
-
 }
 
 
-/* ============================================================
-   STATISTICS
-============================================================ */
+/* =========================================================
+   LOADING / EMPTY / ERROR
+   ========================================================= */
 
-function renderStatistics(data) {
+function showLoading(elementId, message = "Loading...") {
+    const element = $(elementId);
 
-    const stats = data.statistics || {};
-    const counts = data.counts || {};
+    if (!element) {
+        return;
+    }
 
-    setText(
-        "total-orders",
-        formatNumber(
-            stats.total_orders || 0
-        )
-    );
+    element.innerHTML = `
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>${escapeHTML(message)}</p>
+        </div>
+    `;
+}
 
-    setText(
-        "total-sales",
-        formatCurrency(
-            stats.total_sales || 0
-        )
-    );
+function showEmpty(elementId, message = "No data available") {
+    const element = $(elementId);
 
-    setText(
-        "average-order",
-        formatCurrency(
-            stats.average_order || 0
-        )
-    );
+    if (!element) {
+        return;
+    }
 
-    setText(
-        "highest-order",
-        formatCurrency(
-            stats.highest_order || 0
-        )
-    );
+    element.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">◌</div>
+            <p>${escapeHTML(message)}</p>
+        </div>
+    `;
+}
+
+function showError(elementId, message = "Something went wrong") {
+    const element = $(elementId);
+
+    if (!element) {
+        return;
+    }
+
+    element.innerHTML = `
+        <div class="error-state">
+            <p>${escapeHTML(message)}</p>
+        </div>
+    `;
+}
 
 
-    Object.keys(counts).forEach(table => {
+/* =========================================================
+   DASHBOARD LOADING
+   ========================================================= */
 
-        setText(
-            `count-${table}`,
-            formatNumber(
-                counts[table]
+async function loadDashboard() {
+    try {
+        const data = await apiRequest("/api/dashboard");
+
+        dashboardData = safeObject(data);
+
+        console.log("Dashboard data:", dashboardData);
+
+        updateKPIs(dashboardData);
+        updateCounts(dashboardData);
+
+        renderMonthlySales(
+            getDataset(
+                dashboardData,
+                [
+                    "monthly_sales",
+                    "monthlySales",
+                    "sales_by_month"
+                ]
             )
         );
 
-    });
+        renderOrderStatus(
+            getDataset(
+                dashboardData,
+                [
+                    "order_status",
+                    "orderStatus",
+                    "orders_by_status"
+                ]
+            )
+        );
 
+        renderProductPerformance(
+            getDataset(
+                dashboardData,
+                [
+                    "product_performance",
+                    "productPerformance",
+                    "products"
+                ]
+            )
+        );
+
+        renderProjectStatus(
+            getDataset(
+                dashboardData,
+                [
+                    "project_status",
+                    "projectStatus",
+                    "projects_by_status"
+                ]
+            )
+        );
+
+        renderInventoryCategory(
+            getDataset(
+                dashboardData,
+                [
+                    "inventory_category",
+                    "inventoryCategory",
+                    "inventory_by_category"
+                ]
+            )
+        );
+
+        renderInvoiceStatus(
+            getDataset(
+                dashboardData,
+                [
+                    "invoice_status",
+                    "invoiceStatus",
+                    "invoices_by_status"
+                ]
+            )
+        );
+
+        renderEmployeeDepartment(
+            getDataset(
+                dashboardData,
+                [
+                    "employee_department",
+                    "employeeDepartment",
+                    "employees_by_department"
+                ]
+            )
+        );
+
+        renderRecentOrders(
+            getDataset(
+                dashboardData,
+                [
+                    "recent_orders",
+                    "recentOrders",
+                    "orders"
+                ]
+            )
+        );
+
+        renderDashboardRecords(dashboardData);
+
+    } catch (error) {
+        console.error("Dashboard loading failed:", error);
+
+        showDashboardError(
+            "Unable to load dashboard data. Check Flask and MySQL."
+        );
+    }
 }
 
 
-/* ============================================================
-   AI
-============================================================ */
+/* =========================================================
+   DATASET FINDER
+   ========================================================= */
 
-function renderAI(ai) {
-
-    if (!ai) return;
-
-    const score = Number(
-        ai.overall_score || 0
-    );
-
-    setText(
-        "health-score",
-        score
-    );
-
-    setText(
-        "business-level",
-        ai.business_level || "Analysing..."
-    );
-
-    setText(
-        "ai-summary",
-        ai.summary || ""
-    );
-
-
-    const scores = ai.scores || {};
-
-    Object.keys(scores).forEach(key => {
-
-        setText(
-            `score-${key}`,
-            scores[key]
-        );
-
-    });
-
-
-    const explanations =
-        ai.explanations || {};
-
-    Object.keys(explanations).forEach(key => {
-
-        setText(
-            `explain-${key}`,
-            explanations[key]
-        );
-
-    });
-
-
-    const recommendations =
-        ai.recommendations || [];
-
-    const recommendationContainer =
-        document.getElementById(
-            "recommendations"
-        );
-
-    if (recommendationContainer) {
-
-        recommendationContainer.innerHTML = "";
-
-        recommendations.forEach(
-            recommendation => {
-
-                const item =
-                    document.createElement("div");
-
-                item.className =
-                    "recommendation-item";
-
-                item.innerHTML = `
-                    <span>✓</span>
-                    <p>${escapeHtml(
-                        recommendation
-                    )}</p>
-                `;
-
-                recommendationContainer.appendChild(
-                    item
-                );
-
-            }
-        );
-
+function getDataset(data, names) {
+    for (const name of names) {
+        if (Array.isArray(data[name])) {
+            return data[name];
+        }
     }
 
+    if (data.data && typeof data.data === "object") {
+        for (const name of names) {
+            if (Array.isArray(data.data[name])) {
+                return data.data[name];
+            }
+        }
+    }
+
+    return [];
 }
 
 
-/* ============================================================
-   CHARTS
-============================================================ */
+/* =========================================================
+   KPI CARDS
+   ========================================================= */
+
+function updateKPIs(data) {
+    const metrics =
+        safeObject(data.metrics);
+
+    const kpis =
+        safeObject(data.kpis);
+
+    const source = {
+        ...data,
+        ...metrics,
+        ...kpis
+    };
+
+    const totalOrders =
+        firstNumber(source, [
+            "total_orders",
+            "totalOrders",
+            "orders_count",
+            "order_count"
+        ]);
+
+    const totalSales =
+        firstNumber(source, [
+            "total_sales",
+            "totalSales",
+            "sales",
+            "total_revenue",
+            "revenue"
+        ]);
+
+    const averageOrder =
+        firstNumber(source, [
+            "average_order",
+            "averageOrder",
+            "avg_order",
+            "avgOrder",
+            "average_order_value"
+        ]);
+
+    const highestOrder =
+        firstNumber(source, [
+            "highest_order",
+            "highestOrder",
+            "max_order",
+            "maximum_order"
+        ]);
+
+    setText("totalOrders", formatNumber(totalOrders));
+    setText("totalSales", formatCurrency(totalSales));
+    setText("averageOrder", formatCurrency(averageOrder));
+    setText("highestOrder", formatCurrency(highestOrder));
+}
+
+function firstNumber(object, keys) {
+    for (const key of keys) {
+        if (
+            object[key] !== undefined &&
+            object[key] !== null &&
+            object[key] !== ""
+        ) {
+            const number = Number(object[key]);
+
+            if (Number.isFinite(number)) {
+                return number;
+            }
+        }
+    }
+
+    return 0;
+}
+
+function setText(id, value) {
+    const element = $(id);
+
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+
+/* =========================================================
+   DATABASE COUNTS
+   ========================================================= */
+
+function updateCounts(data) {
+    const counts =
+        safeObject(data.counts);
+
+    const source = {
+        ...data,
+        ...counts
+    };
+
+    setText(
+        "customerCount",
+        formatNumber(
+            firstNumber(source, [
+                "customer_count",
+                "customers",
+                "customerCount"
+            ])
+        )
+    );
+
+    setText(
+        "employeeCount",
+        formatNumber(
+            firstNumber(source, [
+                "employee_count",
+                "employees",
+                "employeeCount"
+            ])
+        )
+    );
+
+    setText(
+        "productCount",
+        formatNumber(
+            firstNumber(source, [
+                "product_count",
+                "products",
+                "productCount"
+            ])
+        )
+    );
+
+    setText(
+        "inventoryCount",
+        formatNumber(
+            firstNumber(source, [
+                "inventory_count",
+                "inventory",
+                "inventoryCount"
+            ])
+        )
+    );
+
+    setText(
+        "projectCount",
+        formatNumber(
+            firstNumber(source, [
+                "project_count",
+                "projects",
+                "projectCount"
+            ])
+        )
+    );
+
+    setText(
+        "invoiceCount",
+        formatNumber(
+            firstNumber(source, [
+                "invoice_count",
+                "invoices",
+                "invoiceCount"
+            ])
+        )
+    );
+
+    setText(
+        "orderCount",
+        formatNumber(
+            firstNumber(source, [
+                "order_count",
+                "orders",
+                "orderCount",
+                "total_orders"
+            ])
+        )
+    );
+}
+
+
+/* =========================================================
+   CHART HELPERS
+   ========================================================= */
+
+function chartAvailable() {
+    return typeof Chart !== "undefined";
+}
 
 function destroyChart(name) {
-
     if (charts[name]) {
-
         charts[name].destroy();
-
-        delete charts[name];
-
+        charts[name] = null;
     }
-
 }
 
-
-function createChart(
-    name,
-    canvasId,
-    type,
-    labels,
-    values
-) {
-
-    const canvas =
-        document.getElementById(
-            canvasId
-        );
-
-    if (!canvas) return;
-
-    destroyChart(name);
-
-    if (
-        !labels ||
-        !labels.length ||
-        !values ||
-        !values.length
-    ) {
-
-        const parent =
-            canvas.parentElement;
-
-        parent.innerHTML = `
-            <div class="chart-empty">
-                No data available
-            </div>
-        `;
-
-        return;
-
+function normalizeChartData(data) {
+    if (!Array.isArray(data)) {
+        return {
+            labels: [],
+            values: []
+        };
     }
 
-    const isLine =
-        type === "line";
+    const labels = [];
+    const values = [];
 
-    charts[name] = new Chart(
+    data.forEach(item => {
+        if (item === null || item === undefined) {
+            return;
+        }
+
+        if (typeof item !== "object") {
+            labels.push(String(item));
+            values.push(1);
+            return;
+        }
+
+        const label =
+            item.label ??
+            item.name ??
+            item.month ??
+            item.status ??
+            item.category ??
+            item.product ??
+            item.product_name ??
+            item.project ??
+            item.department ??
+            "Unknown";
+
+        const value =
+            item.value ??
+            item.total ??
+            item.amount ??
+            item.sales ??
+            item.count ??
+            item.quantity ??
+            0;
+
+        labels.push(String(label));
+        values.push(Number(value) || 0);
+    });
+
+    return {
+        labels,
+        values
+    };
+}
+
+function createChart(
+    canvasId,
+    chartName,
+    type,
+    data,
+    options = {}
+) {
+    const canvas = $(canvasId);
+
+    if (!canvas) {
+        return;
+    }
+
+    destroyChart(chartName);
+
+    if (!chartAvailable()) {
+        showChartMessage(
+            canvasId,
+            "Chart.js is not loaded."
+        );
+        return;
+    }
+
+    const normalized =
+        normalizeChartData(data);
+
+    if (!normalized.labels.length) {
+        showChartMessage(
+            canvasId,
+            "No data available"
+        );
+        return;
+    }
+
+    charts[chartName] = new Chart(
         canvas.getContext("2d"),
         {
             type: type,
 
             data: {
-                labels: labels,
+                labels: normalized.labels,
 
                 datasets: [
                     {
-                        label: "Value",
+                        label:
+                            options.label || "Value",
 
-                        data: values,
-
-                        backgroundColor:
-                            isLine
-                                ? "rgba(59,130,246,0.12)"
-                                : chartColors,
-
-                        borderColor:
-                            isLine
-                                ? "#3b82f6"
-                                : chartColors,
+                        data: normalized.values,
 
                         borderWidth: 2,
 
-                        borderRadius:
-                            type === "bar"
-                                ? 8
-                                : 0,
+                        tension: 0.35,
 
-                        fill: isLine,
+                        fill:
+                            type === "line",
 
-                        tension:
-                            isLine
-                                ? 0.4
-                                : 0
+                        backgroundColor:
+                            [
+                                "rgba(124, 92, 255, 0.75)",
+                                "rgba(0, 212, 255, 0.75)",
+                                "rgba(0, 255, 170, 0.75)",
+                                "rgba(255, 170, 0, 0.75)",
+                                "rgba(255, 80, 120, 0.75)",
+                                "rgba(180, 80, 255, 0.75)"
+                            ],
+
+                        borderColor:
+                            "rgba(124, 92, 255, 1)"
                     }
                 ]
             },
@@ -412,1342 +648,2120 @@ function createChart(
 
                 maintainAspectRatio: false,
 
-                animation: {
-                    duration: 1200
-                },
-
                 plugins: {
                     legend: {
                         display:
-                            type === "doughnut"
+                            options.legend !== false,
+
+                        labels: {
+                            color: "#ffffff"
+                        }
                     }
                 },
 
                 scales:
-                    type === "doughnut"
+                    type === "doughnut" ||
+                    type === "pie"
                         ? {}
                         : {
                             x: {
-                                grid: {
-                                    color:
-                                        "rgba(148,163,184,.08)"
+                                ticks: {
+                                    color: "#aeb6d1"
                                 },
 
-                                ticks: {
+                                grid: {
                                     color:
-                                        "#94a3b8"
+                                        "rgba(255,255,255,0.05)"
                                 }
                             },
 
                             y: {
-                                grid: {
-                                    color:
-                                        "rgba(148,163,184,.08)"
-                                },
+                                beginAtZero: true,
 
                                 ticks: {
-                                    color:
-                                        "#94a3b8"
+                                    color: "#aeb6d1"
                                 },
 
-                                beginAtZero: true
+                                grid: {
+                                    color:
+                                        "rgba(255,255,255,0.05)"
+                                }
                             }
                         }
             }
         }
     );
-
 }
 
+function showChartMessage(canvasId, message) {
+    const canvas = $(canvasId);
 
-function renderCharts(chartsData) {
-
-    chartsData =
-        chartsData || {};
-
-
-    /* Monthly Sales */
-
-    const monthly =
-        chartsData.monthly_sales || [];
-
-    createChart(
-        "monthlySales",
-        "monthlySalesChart",
-        "line",
-
-        monthly.map(
-            item => item.label
-        ),
-
-        monthly.map(
-            item => Number(item.value)
-        )
-    );
-
-
-    /* Order Status */
-
-    const orderStatus =
-        chartsData.order_status || [];
-
-    createChart(
-        "orderStatus",
-        "orderStatusChart",
-        "doughnut",
-
-        orderStatus.map(
-            item => item.label
-        ),
-
-        orderStatus.map(
-            item => Number(item.value)
-        )
-    );
-
-
-    /* Product */
-
-    const products =
-        chartsData.product_performance || [];
-
-    createChart(
-        "products",
-        "productChart",
-        "bar",
-
-        products.map(
-            item => item.label
-        ),
-
-        products.map(
-            item => Number(item.value)
-        )
-    );
-
-
-    /* Customer */
-
-    const customers =
-        chartsData.customer_activity || [];
-
-    createChart(
-        "customers",
-        "customerChart",
-        "bar",
-
-        customers.map(
-            item => item.label
-        ),
-
-        customers.map(
-            item => Number(item.value)
-        )
-    );
-
-
-    /* Projects */
-
-    const projects =
-        chartsData.project_status || [];
-
-    createChart(
-        "projects",
-        "projectChart",
-        "doughnut",
-
-        projects.map(
-            item => item.label
-        ),
-
-        projects.map(
-            item => Number(item.value)
-        )
-    );
-
-
-    /* Admin charts */
-
-    if (
-        window.APP_ROLE === "admin"
-    ) {
-
-        const inventory =
-            chartsData.inventory_category || [];
-
-        createChart(
-            "inventory",
-            "inventoryChart",
-            "bar",
-
-            inventory.map(
-                item => item.label
-            ),
-
-            inventory.map(
-                item => Number(item.value)
-            )
-        );
-
-
-        const invoices =
-            chartsData.invoice_status || [];
-
-        createChart(
-            "invoices",
-            "invoiceChart",
-            "doughnut",
-
-            invoices.map(
-                item => item.label
-            ),
-
-            invoices.map(
-                item => Number(item.value)
-            )
-        );
-
-
-        const employees =
-            chartsData.employee_department || [];
-
-        createChart(
-            "employees",
-            "employeeChart",
-            "bar",
-
-            employees.map(
-                item => item.label
-            ),
-
-            employees.map(
-                item => Number(item.value)
-            )
-        );
-
+    if (!canvas) {
+        return;
     }
 
+    const parent =
+        canvas.parentElement;
+
+    if (!parent) {
+        return;
+    }
+
+    parent.innerHTML = `
+        <div class="empty-state chart-empty">
+            <p>${escapeHTML(message)}</p>
+        </div>
+    `;
 }
 
 
-/* ============================================================
+/* =========================================================
+   MONTHLY SALES
+   ========================================================= */
+
+function renderMonthlySales(data) {
+    createChart(
+        "monthlySalesChart",
+        "monthlySales",
+        "line",
+        data,
+        {
+            label: "Monthly Sales"
+        }
+    );
+}
+
+
+/* =========================================================
+   ORDER STATUS
+   ========================================================= */
+
+function renderOrderStatus(data) {
+    createChart(
+        "orderStatusChart",
+        "orderStatus",
+        "doughnut",
+        data,
+        {
+            label: "Orders",
+            legend: true
+        }
+    );
+}
+
+
+/* =========================================================
+   PRODUCT PERFORMANCE
+   ========================================================= */
+
+function renderProductPerformance(data) {
+    createChart(
+        "productPerformanceChart",
+        "productPerformance",
+        "bar",
+        data,
+        {
+            label: "Product Performance"
+        }
+    );
+}
+
+
+/* =========================================================
+   PROJECT STATUS
+   ========================================================= */
+
+function renderProjectStatus(data) {
+    createChart(
+        "projectStatusChart",
+        "projectStatus",
+        "doughnut",
+        data,
+        {
+            label: "Projects"
+        }
+    );
+}
+
+
+/* =========================================================
+   INVENTORY CATEGORY
+   ========================================================= */
+
+function renderInventoryCategory(data) {
+    createChart(
+        "inventoryCategoryChart",
+        "inventoryCategory",
+        "bar",
+        data,
+        {
+            label: "Inventory"
+        }
+    );
+}
+
+
+/* =========================================================
+   INVOICE STATUS
+   ========================================================= */
+
+function renderInvoiceStatus(data) {
+    createChart(
+        "invoiceStatusChart",
+        "invoiceStatus",
+        "doughnut",
+        data,
+        {
+            label: "Invoices"
+        }
+    );
+}
+
+
+/* =========================================================
+   EMPLOYEE DEPARTMENT
+   ========================================================= */
+
+function renderEmployeeDepartment(data) {
+    createChart(
+        "employeeDepartmentChart",
+        "employeeDepartment",
+        "bar",
+        data,
+        {
+            label: "Employees"
+        }
+    );
+}
+
+
+/* =========================================================
    RECENT ORDERS
-============================================================ */
+   ========================================================= */
 
 function renderRecentOrders(rows) {
+    const body =
+        $("recentOrdersBody");
 
-    const container =
-        document.getElementById(
-            "recent-orders"
-        );
+    if (!body) {
+        return;
+    }
 
-    if (!container) return;
+    rows = safeArray(rows);
 
-    if (
-        !rows ||
-        !rows.length
-    ) {
-
-        container.innerHTML = `
-            <div class="empty-state">
-                No recent orders found.
-            </div>
+    if (!rows.length) {
+        body.innerHTML = `
+            <tr>
+                <td colspan="10">
+                    <div class="empty-state">
+                        No recent orders found.
+                    </div>
+                </td>
+            </tr>
         `;
 
         return;
+    }
+
+    body.innerHTML =
+        rows.slice(0, 10)
+            .map(row => {
+
+                const data =
+                    safeObject(row);
+
+                const id =
+                    data.order_id ??
+                    data.id ??
+                    "-";
+
+                const customer =
+                    data.customer_name ??
+                    data.customer ??
+                    data.customer_id ??
+                    "-";
+
+                const product =
+                    data.product_name ??
+                    data.product ??
+                    data.product_id ??
+                    "-";
+
+                const amount =
+                    data.total_amount ??
+                    data.amount ??
+                    data.total ??
+                    0;
+
+                const status =
+                    data.status ??
+                    data.order_status ??
+                    "Unknown";
+
+                const date =
+                    data.order_date ??
+                    data.date ??
+                    data.created_at ??
+                    "-";
+
+                return `
+                    <tr>
+                        <td>${escapeHTML(id)}</td>
+
+                        <td>
+                            ${escapeHTML(customer)}
+                        </td>
+
+                        <td>
+                            ${escapeHTML(product)}
+                        </td>
+
+                        <td>
+                            ${formatCurrency(amount)}
+                        </td>
+
+                        <td>
+                            <span class="status-badge status-info">
+                                ${escapeHTML(capitalize(status))}
+                            </span>
+                        </td>
+
+                        <td>
+                            ${escapeHTML(formatDate(date))}
+                        </td>
+                    </tr>
+                `;
+            })
+            .join("");
+}
+
+
+/* =========================================================
+   DASHBOARD RECORDS
+   ========================================================= */
+
+function renderDashboardRecords(data) {
+    const container =
+        $("dashboardTables");
+
+    if (!container) {
+        return;
+    }
+
+    const records =
+        data.records ||
+        data.tables ||
+        data.database_records;
+
+    if (!records) {
+        showEmpty(
+            "dashboardTables",
+            "Database records will appear here."
+        );
+
+        return;
+    }
+
+    let html = "";
+
+    if (Array.isArray(records)) {
+        html = `
+            <div class="table-wrapper">
+                ${createGenericTable(records)}
+            </div>
+        `;
+    } else if (
+        typeof records === "object"
+    ) {
+        Object.entries(records)
+            .forEach(([table, rows]) => {
+
+                if (!Array.isArray(rows)) {
+                    return;
+                }
+
+                html += `
+                    <div class="table-section">
+
+                        <div class="section-header">
+                            <div>
+                                <h3 class="section-title">
+                                    ${escapeHTML(
+                                        capitalize(table)
+                                    )}
+                                </h3>
+
+                                <p class="section-subtitle">
+                                    ${rows.length} record(s)
+                                </p>
+                            </div>
+
+                            <button
+                                class="btn btn-secondary"
+                                onclick="openTable('${escapeHTML(table)}')"
+                            >
+                                View All
+                            </button>
+                        </div>
+
+                        <div class="table-wrapper">
+                            ${createGenericTable(
+                                rows.slice(0, 5)
+                            )}
+                        </div>
+
+                    </div>
+                `;
+            });
+    }
+
+    if (!html) {
+        showEmpty(
+            "dashboardTables",
+            "No database records available."
+        );
+
+        return;
+    }
+
+    container.innerHTML = html;
+}
+
+
+/* =========================================================
+   GENERIC TABLE
+   ========================================================= */
+
+function createGenericTable(rows) {
+    rows = safeArray(rows);
+
+    if (!rows.length) {
+        return `
+            <div class="empty-state">
+                No records found.
+            </div>
+        `;
     }
 
     const columns =
         Object.keys(rows[0]);
 
-    let html = `
-        <div class="table-scroll">
-            <table class="data-table">
-                <thead>
-                    <tr>
+    return `
+        <table class="data-table">
+
+            <thead>
+                <tr>
+                    ${columns
+                        .map(column => `
+                            <th>
+                                ${escapeHTML(
+                                    column
+                                )}
+                            </th>
+                        `)
+                        .join("")}
+                </tr>
+            </thead>
+
+            <tbody>
+                ${rows
+                    .map(row => `
+                        <tr>
+                            ${columns
+                                .map(column => `
+                                    <td>
+                                        ${escapeHTML(
+                                            formatCell(
+                                                row[column]
+                                            )
+                                        )}
+                                    </td>
+                                `)
+                                .join("")}
+                        </tr>
+                    `)
+                    .join("")}
+            </tbody>
+
+        </table>
     `;
+}
 
-    columns.slice(0, 6).forEach(
-        column => {
+function formatCell(value) {
+    if (
+        value === null ||
+        value === undefined
+    ) {
+        return "-";
+    }
 
-            html += `
-                <th>
-                    ${escapeHtml(
-                        column
-                    )}
-                </th>
-            `;
+    if (
+        typeof value === "object"
+    ) {
+        return JSON.stringify(value);
+    }
 
-        }
-    );
-
-    html += `
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    rows.forEach(row => {
-
-        html += "<tr>";
-
-        columns.slice(0, 6).forEach(
-            column => {
-
-                html += `
-                    <td>
-                        ${escapeHtml(
-                            row[column]
-                        )}
-                    </td>
-                `;
-
-            }
-        );
-
-        html += "</tr>";
-
-    });
-
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
-
-    container.innerHTML = html;
-
+    return String(value);
 }
 
 
-/* ============================================================
-   TABLE MANAGEMENT
-============================================================ */
-
-function setupTableControls() {
-
-    const search =
-        document.getElementById(
-            "table-search"
-        );
-
-    if (search) {
-
-        let timer;
-
-        search.addEventListener(
-            "input",
-            () => {
-
-                clearTimeout(timer);
-
-                timer = setTimeout(
-                    () => {
-
-                        loadTable(
-                            currentTable,
-                            search.value
-                        );
-
-                    },
-                    300
-                );
-
-            }
-        );
-
-    }
-
-
-    const refresh =
-        document.getElementById(
-            "refresh-table"
-        );
-
-    if (refresh) {
-
-        refresh.addEventListener(
-            "click",
-            () => {
-
-                loadTable(
-                    currentTable,
-                    search?.value || ""
-                );
-
-            }
-        );
-
-    }
-
-
-    const add =
-        document.getElementById(
-            "add-record-button"
-        );
-
-    if (add) {
-
-        add.addEventListener(
-            "click",
-            () => {
-
-                if (
-                    window.APP_ROLE === "admin"
-                ) {
-
-                    openAddModal();
-
-                }
-
-            }
-        );
-
-    }
-
-
-    const modalClose =
-        document.getElementById(
-            "modal-close"
-        );
-
-    const modalCancel =
-        document.getElementById(
-            "modal-cancel"
-        );
-
-    modalClose?.addEventListener(
-        "click",
-        closeModal
-    );
-
-    modalCancel?.addEventListener(
-        "click",
-        closeModal
-    );
-
-
-    const form =
-        document.getElementById(
-            "record-form"
-        );
-
-    form?.addEventListener(
-        "submit",
-        saveRecord
-    );
-
-}
-
-
-async function openTable(table) {
-
-    currentTable = table;
-
-    document
-        .getElementById("dashboard-section")
-        ?.classList.add("hidden");
-
-    document
-        .getElementById("table-section")
-        ?.classList.remove("hidden");
-
-    const displayName =
-        table.charAt(0).toUpperCase() +
-        table.slice(1);
-
-    setText(
-        "table-title",
-        displayName
-    );
-
-    setText(
-        "page-title",
-        displayName
-    );
-
-    setText(
-        "table-description",
-        window.APP_ROLE === "admin"
-            ? "Manage database records"
-            : "Read-only database records"
-    );
-
-
-    const addButton =
-        document.getElementById(
-            "add-record-button"
-        );
-
-    if (addButton) {
-
-        if (
-            window.APP_ROLE === "admin"
-        ) {
-
-            addButton.style.display =
-                "block";
-
-        } else {
-
-            addButton.style.display =
-                "none";
-
-        }
-
-    }
-
-
-    await loadColumns(table);
-
-    await loadTable(table);
-
-}
-
-
-async function loadColumns(table) {
-
-    try {
-
-        const response =
-            await fetch(
-                `/api/table/${table}/columns`
-            );
-
-        const json =
-            await response.json();
-
-        if (!json.success) {
-
-            showToast(
-                json.error,
-                "error"
-            );
-
-            return;
-        }
-
-        currentColumns =
-            json.columns || [];
-
-        currentPrimaryKey =
-            json.primary_key;
-
-    } catch (error) {
-
-        console.error(error);
-
-    }
-
-}
-
-
-async function loadTable(
-    table,
-    search = ""
-) {
-
-    if (!table) return;
-
-    try {
-
-        const url =
-            `/api/table/${table}` +
-            `?search=${encodeURIComponent(search)}` +
-            `&limit=100`;
-
-        const response =
-            await fetch(url);
-
-        const json =
-            await response.json();
-
-        if (!json.success) {
-
-            showToast(
-                json.error,
-                "error"
-            );
-
-            return;
-        }
-
-        renderDataTable(json);
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Unable to load table",
-            "error"
-        );
-
-    }
-
-}
-
-
-/* ============================================================
-   DATA TABLE
-============================================================ */
-
-function renderDataTable(data) {
-
-    const container =
-        document.getElementById(
-            "data-table-container"
-        );
-
-    if (!container) return;
-
-    const columns =
-        data.columns || [];
-
-    const rows =
-        data.rows || [];
-
-    currentPrimaryKey =
-        data.primary_key;
-
-
-    if (!rows.length) {
-
-        container.innerHTML = `
-            <div class="empty-state">
-                No records found.
-            </div>
-        `;
-
+/* =========================================================
+   DATABASE TABLE OPEN
+   ========================================================= */
+
+async function openTable(tableName) {
+    if (!tableName) {
         return;
     }
 
+    currentTable = tableName;
+    currentPage = 1;
+
+    try {
+        const result =
+            await apiRequest(
+                `/api/table/${encodeURIComponent(tableName)}`
+            );
+
+        currentRows =
+            safeArray(
+                result.rows ||
+                result.data ||
+                result.records
+            );
+
+        currentColumns =
+            safeArray(result.columns);
+
+        if (!currentColumns.length &&
+            currentRows.length) {
+
+            currentColumns =
+                Object.keys(
+                    currentRows[0]
+                );
+        }
+
+        renderTableModal(
+            tableName,
+            currentRows,
+            currentColumns
+        );
+
+    } catch (error) {
+        console.error(
+            "Unable to open table:",
+            error
+        );
+
+        alert(
+            "Unable to load table data: " +
+            error.message
+        );
+    }
+}
+
+
+/* =========================================================
+   TABLE MODAL
+   ========================================================= */
+
+function renderTableModal(
+    tableName,
+    rows,
+    columns
+) {
+    const modal =
+        $("tableModal");
+
+    if (!modal) {
+        return;
+    }
+
+    const title =
+        modal.querySelector(
+            ".modal-title"
+        );
+
+    if (title) {
+        title.textContent =
+            capitalize(tableName);
+    }
+
+    const body =
+        modal.querySelector(
+            ".modal-body"
+        );
+
+    if (!body) {
+        return;
+    }
+
+    body.innerHTML = `
+        <div class="table-toolbar">
+
+            <div class="search-box">
+                <input
+                    type="text"
+                    id="tableSearch"
+                    class="table-search"
+                    placeholder="Search records..."
+                    oninput="searchCurrentTable(this.value)"
+                >
+            </div>
+
+            <div class="table-controls">
+
+                <span>
+                    ${rows.length} record(s)
+                </span>
+
+                ${isAdmin() && tableName !== "customer"
+                    ? `
+                        <button
+                            class="btn btn-primary btn-add"
+                            onclick="showAddForm('${escapeHTML(tableName)}')"
+                        >
+                            + Add Record
+                        </button>
+                    `
+                    : ""
+                }
+
+                ${isAdmin() && tableName === "customer"
+                    ? `
+                        <button
+                            class="btn btn-primary btn-add"
+                            onclick="showAddForm('${escapeHTML(tableName)}')"
+                        >
+                            + Add Customer
+                        </button>
+                    `
+                    : ""
+                }
+
+            </div>
+
+        </div>
+
+        <div
+            id="tableModalContent"
+            class="table-wrapper"
+        >
+            ${buildModalTable(
+                rows,
+                columns
+            )}
+        </div>
+    `;
+
+    modal.classList.add("active");
+    modal.style.display = "flex";
+}
+
+
+/* =========================================================
+   BUILD MODAL TABLE
+   ========================================================= */
+
+function buildModalTable(
+    rows,
+    columns
+) {
+    if (!rows.length) {
+        return `
+            <div class="empty-state">
+                <p>No records found.</p>
+            </div>
+        `;
+    }
+
+    const start =
+        (currentPage - 1) *
+        rowsPerPage;
+
+    const end =
+        start + rowsPerPage;
+
+    const pageRows =
+        rows.slice(start, end);
 
     let html = `
-        <div class="table-scroll">
         <table class="data-table">
+
             <thead>
                 <tr>
     `;
 
     columns.forEach(column => {
-
         html += `
             <th>
-                ${escapeHtml(column)}
+                ${escapeHTML(column)}
             </th>
         `;
-
     });
 
-
-    if (
-        window.APP_ROLE === "admin"
-    ) {
-
+    if (isAdmin()) {
         html += `
-            <th>
-                Actions
-            </th>
+            <th>Actions</th>
         `;
-
     }
 
     html += `
                 </tr>
             </thead>
+
             <tbody>
     `;
 
+    pageRows.forEach(row => {
 
-    rows.forEach(row => {
-
-        html += "<tr>";
+        html += `
+            <tr>
+        `;
 
         columns.forEach(column => {
 
-            let value =
-                row[column];
-
-            if (
-                value === null ||
-                value === undefined
-            ) {
-
-                value = "-";
-
-            }
-
             html += `
                 <td>
-                    ${escapeHtml(value)}
+                    ${escapeHTML(
+                        formatCell(
+                            row[column]
+                        )
+                    )}
                 </td>
             `;
-
         });
 
+        if (isAdmin()) {
 
-        if (
-            window.APP_ROLE === "admin"
-        ) {
-
-            const id =
-                row[currentPrimaryKey];
-
-
-            html += `
-                <td>
-                    <div class="action-buttons">
-            `;
-
-
-            /*
-             CUSTOMER:
-             View + Delete
-             NO EDIT
-            */
+            const primaryKey =
+                getPrimaryKeyValue(row);
 
             if (
-                currentTable !== "customer"
+                currentTable === "customer"
             ) {
 
                 html += `
-                    <button
-                        class="action-button edit"
-                        onclick='openEditModal(${JSON.stringify(
-                            row
-                        )})'
-                    >
-                        Edit
-                    </button>
+                    <td>
+                        <button
+                            class="action-btn action-delete"
+                            onclick="deleteRecord(
+                                '${escapeHTML(currentTable)}',
+                                '${escapeHTML(primaryKey)}'
+                            )"
+                        >
+                            Delete
+                        </button>
+                    </td>
                 `;
 
             } else {
 
                 html += `
-                    <button
-                        class="action-button view"
-                        onclick='viewRecord(${JSON.stringify(
-                            row
-                        )})'
-                    >
-                        View
-                    </button>
+                    <td>
+
+                        <button
+                            class="action-btn action-edit"
+                            onclick='editRecord(
+                                ${JSON.stringify(row)}
+                            )'
+                        >
+                            Edit
+                        </button>
+
+                        <button
+                            class="action-btn action-delete"
+                            onclick="deleteRecord(
+                                '${escapeHTML(currentTable)}',
+                                '${escapeHTML(primaryKey)}'
+                            )"
+                        >
+                            Delete
+                        </button>
+
+                    </td>
                 `;
-
             }
-
-
-            html += `
-                    <button
-                        class="action-button delete"
-                        onclick='deleteRecord(${JSON.stringify(
-                            id
-                        )})'
-                    >
-                        Delete
-                    </button>
-
-                    </div>
-                </td>
-            `;
-
         }
 
-
-        html += "</tr>";
-
+        html += `
+            </tr>
+        `;
     });
-
 
     html += `
             </tbody>
+
         </table>
-        </div>
     `;
 
-    container.innerHTML = html;
-
-}
-
-
-/* ============================================================
-   ADD
-============================================================ */
-
-function openAddModal() {
-
-    if (
-        window.APP_ROLE !== "admin"
-    ) return;
-
-    editingId = null;
-
-    setText(
-        "modal-title",
-        `Add ${currentTable}`
+    html += buildPagination(
+        rows.length
     );
 
-    const container =
-        document.getElementById(
-            "form-fields"
-        );
-
-    container.innerHTML = "";
-
-
-    currentColumns.forEach(column => {
-
-        if (
-            column.Field ===
-            currentPrimaryKey
-        ) {
-
-            return;
-
-        }
-
-
-        const group =
-            document.createElement(
-                "div"
-            );
-
-        group.className =
-            "form-group";
-
-
-        group.innerHTML = `
-            <label>
-                ${escapeHtml(
-                    column.Field
-                )}
-            </label>
-
-            <input
-                type="text"
-                name="${escapeHtml(
-                    column.Field
-                )}"
-                placeholder="Enter ${escapeHtml(
-                    column.Field
-                )}"
-            >
-        `;
-
-        container.appendChild(
-            group
-        );
-
-    });
-
-
-    document
-        .getElementById("modal")
-        .classList.remove("hidden");
-
+    return html;
 }
 
 
-/* ============================================================
-   EDIT
-============================================================ */
+/* =========================================================
+   PRIMARY KEY
+   ========================================================= */
 
-function openEditModal(row) {
+function getPrimaryKeyValue(row) {
+    const possibleKeys = [
+        "id",
+        "customer_id",
+        "employee_id",
+        "product_id",
+        "inventory_id",
+        "order_id",
+        "project_id",
+        "invoice_id"
+    ];
 
-    if (
-        window.APP_ROLE !== "admin"
-    ) return;
+    for (const key of possibleKeys) {
+        if (
+            row[key] !== undefined &&
+            row[key] !== null
+        ) {
+            return row[key];
+        }
+    }
+
+    const keys =
+        Object.keys(row);
+
+    return keys.length
+        ? row[keys[0]]
+        : "";
+}
+
+
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+
+function buildPagination(totalRows) {
+    const totalPages =
+        Math.ceil(
+            totalRows / rowsPerPage
+        );
+
+    if (totalPages <= 1) {
+        return "";
+    }
+
+    return `
+        <div class="pagination">
+
+            <button
+                class="btn btn-secondary"
+                onclick="changeTablePage(-1)"
+                ${currentPage <= 1
+                    ? "disabled"
+                    : ""}
+            >
+                Previous
+            </button>
+
+            <span>
+                Page ${currentPage}
+                of ${totalPages}
+            </span>
+
+            <button
+                class="btn btn-secondary"
+                onclick="changeTablePage(1)"
+                ${currentPage >= totalPages
+                    ? "disabled"
+                    : ""}
+            >
+                Next
+            </button>
+
+        </div>
+    `;
+}
+
+function changeTablePage(direction) {
+    const totalPages =
+        Math.ceil(
+            currentRows.length /
+            rowsPerPage
+        );
+
+    currentPage += direction;
+
+    if (currentPage < 1) {
+        currentPage = 1;
+    }
+
+    if (currentPage > totalPages) {
+        currentPage = totalPages;
+    }
+
+    const content =
+        $("tableModalContent");
+
+    if (content) {
+        content.innerHTML =
+            buildModalTable(
+                currentRows,
+                currentColumns
+            );
+    }
+}
+
+
+/* =========================================================
+   SEARCH TABLE
+   ========================================================= */
+
+function searchCurrentTable(searchText) {
+    const text =
+        String(searchText || "")
+            .toLowerCase()
+            .trim();
+
+    if (!text) {
+        currentRows =
+            window.originalTableRows ||
+            currentRows;
+
+        currentPage = 1;
+
+        refreshModalTable();
+
+        return;
+    }
+
+    if (!window.originalTableRows) {
+        window.originalTableRows =
+            [...currentRows];
+    }
+
+    currentRows =
+        window.originalTableRows.filter(
+            row => {
+
+                return Object.values(row)
+                    .some(value =>
+                        String(value)
+                            .toLowerCase()
+                            .includes(text)
+                    );
+            }
+        );
+
+    currentPage = 1;
+
+    refreshModalTable();
+}
+
+function refreshModalTable() {
+    const content =
+        $("tableModalContent");
+
+    if (!content) {
+        return;
+    }
+
+    content.innerHTML =
+        buildModalTable(
+            currentRows,
+            currentColumns
+        );
+}
+
+
+/* =========================================================
+   CLOSE TABLE MODAL
+   ========================================================= */
+
+function closeTableModal() {
+    const modal =
+        $("tableModal");
+
+    if (!modal) {
+        return;
+    }
+
+    modal.classList.remove("active");
+    modal.style.display = "none";
+
+    window.originalTableRows = null;
+}
+
+
+/* =========================================================
+   ADD RECORD
+   ========================================================= */
+
+async function showAddForm(tableName) {
+    if (!isAdmin()) {
+        alert("Admin access required.");
+        return;
+    }
+
+    try {
+        const result =
+            await apiRequest(
+                `/api/table/${encodeURIComponent(tableName)}/columns`
+            );
+
+        const columns =
+            safeArray(
+                result.columns ||
+                result
+            );
+
+        openEditModal(
+            tableName,
+            {},
+            columns,
+            true
+        );
+
+    } catch (error) {
+        console.error(error);
+
+        alert(
+            "Unable to get table columns: " +
+            error.message
+        );
+    }
+}
+
+
+/* =========================================================
+   EDIT RECORD
+   ========================================================= */
+
+function editRecord(row) {
+    if (!isAdmin()) {
+        alert("Admin access required.");
+        return;
+    }
 
     if (
         currentTable === "customer"
     ) {
-
-        showToast(
-            "Customer records cannot be edited.",
-            "error"
+        alert(
+            "Customer records cannot be edited."
         );
 
         return;
-
     }
 
+    const columns =
+        Object.keys(row);
 
-    editingId =
-        row[currentPrimaryKey];
-
-
-    setText(
-        "modal-title",
-        `Edit ${currentTable}`
+    openEditModal(
+        currentTable,
+        row,
+        columns,
+        false
     );
+}
 
 
-    const container =
-        document.getElementById(
-            "form-fields"
+/* =========================================================
+   EDIT MODAL
+   ========================================================= */
+
+function openEditModal(
+    tableName,
+    row,
+    columns,
+    isNew
+) {
+    const modal =
+        $("editModal");
+
+    if (!modal) {
+        alert(
+            "Edit modal is missing from HTML."
         );
 
-    container.innerHTML = "";
+        return;
+    }
 
+    const title =
+        modal.querySelector(
+            ".modal-title"
+        );
 
-    currentColumns.forEach(column => {
+    if (title) {
+        title.textContent =
+            isNew
+                ? `Add ${capitalize(tableName)}`
+                : `Edit ${capitalize(tableName)}`;
+    }
 
-        const field =
-            column.Field;
+    const body =
+        modal.querySelector(
+            ".modal-body"
+        );
 
+    if (!body) {
+        return;
+    }
 
-        if (
-            field ===
-            currentPrimaryKey
-        ) {
+    let html = `
+        <form
+            id="recordForm"
+            onsubmit="saveRecord(event, '${escapeHTML(tableName)}', ${isNew})"
+        >
 
-            return;
+            <div class="form-grid">
+    `;
 
-        }
+    columns.forEach(column => {
 
-
-        const group =
-            document.createElement(
-                "div"
-            );
-
-        group.className =
-            "form-group";
-
+        const isPrimary =
+            [
+                "id",
+                "customer_id",
+                "employee_id",
+                "product_id",
+                "inventory_id",
+                "order_id",
+                "project_id",
+                "invoice_id"
+            ].includes(column);
 
         const value =
-            row[field] ?? "";
+            row[column] ??
+            "";
 
+        html += `
+            <div class="form-group">
 
-        group.innerHTML = `
-            <label>
-                ${escapeHtml(field)}
-            </label>
+                <label class="form-label">
+                    ${escapeHTML(column)}
+                </label>
 
-            <input
-                type="text"
-                name="${escapeHtml(field)}"
-                value="${escapeAttribute(
-                    value
-                )}"
-            >
+                <input
+                    class="form-input"
+                    type="text"
+                    name="${escapeHTML(column)}"
+                    value="${escapeHTML(value)}"
+                    ${!isNew && isPrimary
+                        ? "readonly"
+                        : ""}
+                >
+
+            </div>
         `;
-
-
-        container.appendChild(
-            group
-        );
-
     });
 
+    html += `
+            </div>
 
-    document
-        .getElementById("modal")
-        .classList.remove("hidden");
+            <div class="form-actions">
 
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    onclick="closeEditModal()"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    class="btn btn-primary"
+                >
+                    ${isNew
+                        ? "Add Record"
+                        : "Save Changes"}
+                </button>
+
+            </div>
+
+        </form>
+    `;
+
+    body.innerHTML = html;
+
+    modal.classList.add("active");
+    modal.style.display = "flex";
 }
 
 
-/* ============================================================
-   VIEW CUSTOMER
-============================================================ */
+/* =========================================================
+   SAVE RECORD
+   ========================================================= */
 
-function viewRecord(row) {
-
-    const values =
-        Object.entries(row)
-            .map(
-                ([key, value]) => `
-                    <div class="view-row">
-                        <strong>
-                            ${escapeHtml(key)}
-                        </strong>
-
-                        <span>
-                            ${escapeHtml(
-                                value ?? "-"
-                            )}
-                        </span>
-                    </div>
-                `
-            )
-            .join("");
-
-
-    const container =
-        document.getElementById(
-            "form-fields"
-        );
-
-    container.innerHTML = values;
-
-    setText(
-        "modal-title",
-        "Customer Details"
-    );
-
-
-    document
-        .getElementById("modal")
-        .classList.remove("hidden");
-
-
-    const form =
-        document.getElementById(
-            "record-form"
-        );
-
-    form.onsubmit = event => {
-        event.preventDefault();
-    };
-
-}
-
-
-/* ============================================================
-   SAVE
-============================================================ */
-
-async function saveRecord(event) {
-
+async function saveRecord(
+    event,
+    tableName,
+    isNew
+) {
     event.preventDefault();
 
-    if (
-        window.APP_ROLE !== "admin"
-    ) return;
-
-
     const form =
-        event.target;
+        $("recordForm");
+
+    if (!form) {
+        return;
+    }
 
     const formData =
         new FormData(form);
 
     const data = {};
 
-
     formData.forEach(
         (value, key) => {
-
             data[key] =
-                value;
-
+                value === ""
+                    ? null
+                    : value;
         }
     );
 
-
     try {
 
-        let url =
-            `/api/table/${currentTable}`;
+        const url =
+            `/api/table/${encodeURIComponent(tableName)}`;
 
-        let method = "POST";
-
-
-        if (editingId !== null) {
-
-            url +=
-                `/${encodeURIComponent(
-                    editingId
-                )}`;
-
-            method = "PUT";
-
-        }
-
-
-        const response =
-            await fetch(
+        const result =
+            await apiRequest(
                 url,
                 {
-                    method: method,
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
+                    method:
+                        isNew
+                            ? "POST"
+                            : "PUT",
 
                     body:
-                        JSON.stringify(
-                            data
-                        )
+                        JSON.stringify(data)
                 }
             );
 
-
-        const json =
-            await response.json();
-
-
-        if (!json.success) {
-
-            showToast(
-                json.error,
-                "error"
-            );
-
-            return;
-        }
-
-
-        closeModal();
-
-        showToast(
-            json.message ||
-            "Saved successfully",
-            "success"
+        console.log(
+            "Save result:",
+            result
         );
 
-
-        loadTable(
-            currentTable,
-            document.getElementById(
-                "table-search"
-            )?.value || ""
+        alert(
+            isNew
+                ? "Record added successfully."
+                : "Record updated successfully."
         );
 
+        closeEditModal();
 
-        loadDashboard();
+        window.originalTableRows = null;
 
+        await openTable(tableName);
+
+        await loadDashboard();
 
     } catch (error) {
 
-        console.error(error);
-
-        showToast(
-            "Operation failed",
-            "error"
+        console.error(
+            "Save failed:",
+            error
         );
 
+        alert(
+            "Unable to save record: " +
+            error.message
+        );
     }
-
 }
 
 
-/* ============================================================
-   DELETE
-============================================================ */
+/* =========================================================
+   DELETE RECORD
+   ========================================================= */
 
-async function deleteRecord(id) {
-
-    if (
-        window.APP_ROLE !== "admin"
-    ) return;
-
-
-    const confirmed =
-        confirm(
-            "Are you sure you want to delete this record?"
+async function deleteRecord(
+    tableName,
+    primaryKey
+) {
+    if (!isAdmin()) {
+        alert(
+            "Admin access required."
         );
 
+        return;
+    }
 
-    if (!confirmed) return;
-
+    if (!confirm(
+        "Are you sure you want to delete this record?"
+    )) {
+        return;
+    }
 
     try {
 
-        const response =
-            await fetch(
-                `/api/table/${currentTable}/${encodeURIComponent(
-                    id
-                )}`,
-                {
-                    method: "DELETE"
-                }
-            );
-
-
-        const json =
-            await response.json();
-
-
-        if (!json.success) {
-
-            showToast(
-                json.error,
-                "error"
-            );
-
-            return;
-        }
-
-
-        showToast(
-            "Record deleted successfully",
-            "success"
-        );
-
-
-        loadTable(
-            currentTable,
-            document.getElementById(
-                "table-search"
-            )?.value || ""
-        );
-
-
-        loadDashboard();
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        showToast(
-            "Delete failed",
-            "error"
-        );
-
-    }
-
-}
-
-
-/* ============================================================
-   MODAL
-============================================================ */
-
-function closeModal() {
-
-    const modal =
-        document.getElementById(
-            "modal"
-        );
-
-    modal?.classList.add(
-        "hidden"
-    );
-
-
-    const form =
-        document.getElementById(
-            "record-form"
-        );
-
-    if (form) {
-
-        form.reset();
-
-        form.onsubmit = null;
-
-    }
-
-}
-
-
-/* ============================================================
-   TOAST
-============================================================ */
-
-function showToast(
-    message,
-    type = "success"
-) {
-
-    const toast =
-        document.getElementById(
-            "toast"
-        );
-
-    if (!toast) return;
-
-
-    toast.textContent =
-        message;
-
-
-    toast.className =
-        `toast ${type} show`;
-
-
-    setTimeout(
-        () => {
-
-            toast.classList.remove(
-                "show"
-            );
-
-        },
-        3000
-    );
-
-}
-
-
-/* ============================================================
-   HELPERS
-============================================================ */
-
-function setText(
-    id,
-    value
-) {
-
-    const element =
-        document.getElementById(id);
-
-    if (element) {
-
-        element.textContent =
-            value;
-
-    }
-
-}
-
-
-function formatNumber(value) {
-
-    const number =
-        Number(value || 0);
-
-    return number.toLocaleString(
-        "en-IN"
-    );
-
-}
-
-
-function formatCurrency(value) {
-
-    const number =
-        Number(value || 0);
-
-    return "₹" +
-        number.toLocaleString(
-            "en-IN",
+        await apiRequest(
+            `/api/table/${encodeURIComponent(tableName)}/${encodeURIComponent(primaryKey)}`,
             {
-                maximumFractionDigits: 2
+                method: "DELETE"
             }
         );
 
+        alert(
+            "Record deleted successfully."
+        );
+
+        window.originalTableRows = null;
+
+        await openTable(tableName);
+
+        await loadDashboard();
+
+    } catch (error) {
+
+        console.error(
+            "Delete failed:",
+            error
+        );
+
+        alert(
+            "Unable to delete record: " +
+            error.message
+        );
+    }
 }
 
 
-function escapeHtml(value) {
+/* =========================================================
+   CLOSE EDIT MODAL
+   ========================================================= */
 
-    if (
-        value === null ||
-        value === undefined
-    ) {
+function closeEditModal() {
+    const modal =
+        $("editModal");
 
-        return "";
-
+    if (!modal) {
+        return;
     }
 
+    modal.classList.remove("active");
+    modal.style.display = "none";
+}
+
+
+/* =========================================================
+   ROLE CHECK
+   ========================================================= */
+
+function getCurrentRole() {
+    const body =
+        document.body;
+
+    if (
+        body &&
+        body.dataset &&
+        body.dataset.role
+    ) {
+        return body.dataset.role
+            .toLowerCase();
+    }
+
+    const roleElement =
+        document.querySelector(
+            ".role-badge"
+        );
+
+    if (roleElement) {
+        return roleElement.textContent
+            .trim()
+            .toLowerCase();
+    }
+
+    const path =
+        window.location.pathname
+            .toLowerCase();
+
+    if (path.includes("admin")) {
+        return "admin";
+    }
+
+    return "user";
+}
+
+function isAdmin() {
+    return getCurrentRole() === "admin";
+}
+
+
+/* =========================================================
+   AI ANALYSIS
+   ========================================================= */
+
+async function loadAIAnalysis() {
+    const container =
+        $("aiAnalysisContent");
+
+    if (!container) {
+        return;
+    }
+
+    try {
+
+        showLoading(
+            "aiAnalysisContent",
+            "Generating AI Business Analysis..."
+        );
+
+        const result =
+            await apiRequest(
+                "/api/ai-analysis"
+            );
+
+        aiData =
+            safeObject(result);
+
+        console.log(
+            "AI analysis:",
+            aiData
+        );
+
+        renderAIAnalysis(aiData);
+
+    } catch (error) {
+
+        console.error(
+            "AI analysis error:",
+            error
+        );
+
+        showError(
+            "aiAnalysisContent",
+            "AI analysis could not be loaded."
+        );
+    }
+}
+
+
+/* =========================================================
+   AI ANALYSIS RENDER
+   ========================================================= */
+
+function renderAIAnalysis(data) {
+    const container =
+        $("aiAnalysisContent");
+
+    if (!container) {
+        return;
+    }
+
+    const score =
+        firstNumber(
+            data,
+            [
+                "score",
+                "health_score",
+                "business_health_score",
+                "healthScore"
+            ]
+        );
+
+    const summary =
+        data.summary ||
+        data.explanation ||
+        data.overall_analysis ||
+        "Business analysis is available below.";
+
+    const strengths =
+        safeArray(
+            data.strengths
+        );
+
+    const risks =
+        safeArray(
+            data.risks
+        );
+
+    const recommendations =
+        safeArray(
+            data.recommendations
+        );
+
+    const metrics =
+        safeObject(
+            data.metrics
+        );
+
+    let html = `
+
+        <div class="ai-analysis-view">
+
+            <div class="health-card">
+
+                <div>
+                    <div class="ai-heading">
+                        Business Health Score
+                    </div>
+
+                    <div class="health-score">
+                        ${Math.round(score)}
+                        <span>/100</span>
+                    </div>
+                </div>
+
+                <div class="ai-score-ring">
+                    ${Math.round(score)}%
+                </div>
+
+            </div>
+
+            <div class="ai-panel">
+
+                <h3 class="ai-title">
+                    AI Business Summary
+                </h3>
+
+                <p class="ai-text">
+                    ${escapeHTML(summary)}
+                </p>
+
+            </div>
+
+    `;
+
+    if (Object.keys(metrics).length) {
+
+        html += `
+            <div class="ai-metrics-grid">
+        `;
+
+        Object.entries(metrics)
+            .slice(0, 8)
+            .forEach(([key, value]) => {
+
+                html += `
+                    <div class="ai-card">
+
+                        <div class="ai-title">
+                            ${escapeHTML(
+                                formatMetricName(key)
+                            )}
+                        </div>
+
+                        <div class="ai-text">
+                            ${escapeHTML(
+                                formatCell(value)
+                            )}
+                        </div>
+
+                    </div>
+                `;
+            });
+
+        html += `
+            </div>
+        `;
+    }
+
+    html += `
+        <div class="ai-panels">
+    `;
+
+    if (strengths.length) {
+
+        html += `
+            <div class="ai-panel">
+
+                <h3 class="ai-title">
+                    Strengths
+                </h3>
+
+                ${createAIList(
+                    strengths,
+                    "recommendation"
+                )}
+
+            </div>
+        `;
+    }
+
+    if (risks.length) {
+
+        html += `
+            <div class="ai-panel">
+
+                <h3 class="ai-title">
+                    Risks / Issues
+                </h3>
+
+                ${createAIList(
+                    risks,
+                    "recommendation"
+                )}
+
+            </div>
+        `;
+    }
+
+    html += `
+        </div>
+    `;
+
+    if (recommendations.length) {
+
+        html += `
+            <div class="recommendation-panel">
+
+                <h3 class="ai-title">
+                    AI Recommendations
+                </h3>
+
+                ${createAIList(
+                    recommendations,
+                    "recommendation"
+                )}
+
+            </div>
+        `;
+    }
+
+    html += `
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    renderAIScoreChart(score);
+}
+
+function formatMetricName(value) {
     return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+        .replace(/_/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/\b\w/g, char =>
+            char.toUpperCase()
+        );
+}
 
+function createAIList(
+    items,
+    className
+) {
+    return items
+        .map(item => {
+
+            const text =
+                typeof item === "object"
+                    ? (
+                        item.text ||
+                        item.message ||
+                        item.description ||
+                        JSON.stringify(item)
+                    )
+                    : item;
+
+            return `
+                <div class="${className}">
+                    ${escapeHTML(text)}
+                </div>
+            `;
+        })
+        .join("");
 }
 
 
-function escapeAttribute(value) {
+/* =========================================================
+   AI SCORE CHART
+   ========================================================= */
 
-    return escapeHtml(value);
+function renderAIScoreChart(score) {
+    if (!exists("aiScoreChart")) {
+        return;
+    }
 
+    destroyChart("aiScore");
+
+    const canvas =
+        $("aiScoreChart");
+
+    if (!chartAvailable()) {
+        return;
+    }
+
+    charts.aiScore =
+        new Chart(
+            canvas.getContext("2d"),
+            {
+                type: "doughnut",
+
+                data: {
+                    labels: [
+                        "Health",
+                        "Remaining"
+                    ],
+
+                    datasets: [
+                        {
+                            data: [
+                                score,
+                                Math.max(
+                                    0,
+                                    100 - score
+                                )
+                            ],
+
+                            borderWidth: 0,
+
+                            backgroundColor: [
+                                "rgba(124, 92, 255, 0.85)",
+                                "rgba(255,255,255,0.08)"
+                            ]
+                        }
+                    ]
+                },
+
+                options: {
+                    responsive: true,
+
+                    maintainAspectRatio: false,
+
+                    cutout: "72%",
+
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        );
 }
+
+
+/* =========================================================
+   DASHBOARD ERROR
+   ========================================================= */
+
+function showDashboardError(message) {
+    console.error(message);
+
+    const possibleContainers = [
+        "dashboardTables",
+        "recentOrdersBody"
+    ];
+
+    possibleContainers.forEach(id => {
+
+        const element = $(id);
+
+        if (!element) {
+            return;
+        }
+
+        if (id === "recentOrdersBody") {
+
+            element.innerHTML = `
+                <tr>
+                    <td colspan="10">
+                        <div class="error-state">
+                            ${escapeHTML(message)}
+                        </div>
+                    </td>
+                </tr>
+            `;
+
+        } else {
+
+            element.innerHTML = `
+                <div class="error-state">
+                    <p>${escapeHTML(message)}</p>
+                </div>
+            `;
+        }
+    });
+}
+
+
+/* =========================================================
+   DATABASE TEST
+   ========================================================= */
+
+async function testDatabase() {
+    try {
+
+        const result =
+            await apiRequest(
+                "/api/database-test"
+            );
+
+        console.log(
+            "Database test:",
+            result
+        );
+
+        return result;
+
+    } catch (error) {
+
+        console.error(
+            "Database test failed:",
+            error
+        );
+
+        return null;
+    }
+}
+
+
+/* =========================================================
+   LOAD TABLE LIST
+   ========================================================= */
+
+async function loadTables() {
+    try {
+
+        const result =
+            await apiRequest(
+                "/api/tables"
+            );
+
+        console.log(
+            "Available tables:",
+            result
+        );
+
+        return result;
+
+    } catch (error) {
+
+        console.error(
+            "Could not load tables:",
+            error
+        );
+
+        return null;
+    }
+}
+
+
+/* =========================================================
+   CURSOR GLOW EFFECT
+   ========================================================= */
+
+function initCursorGlow() {
+    const glow =
+        document.querySelector(
+            ".cursor-glow"
+        );
+
+    if (!glow) {
+        return;
+    }
+
+    document.addEventListener(
+        "mousemove",
+        event => {
+
+            glow.style.left =
+                event.clientX + "px";
+
+            glow.style.top =
+                event.clientY + "px";
+        }
+    );
+}
+
+
+/* =========================================================
+   SCROLL REVEAL
+   ========================================================= */
+
+function initScrollReveal() {
+    const elements =
+        document.querySelectorAll(
+            ".stat-card, .chart-card, .count-card, .recent-card, .ai-card, .ai-panel"
+        );
+
+    if (!elements.length) {
+        return;
+    }
+
+    if (
+        typeof IntersectionObserver ===
+        "undefined"
+    ) {
+        elements.forEach(
+            element =>
+                element.classList.add(
+                    "visible"
+                )
+        );
+
+        return;
+    }
+
+    const observer =
+        new IntersectionObserver(
+            entries => {
+
+                entries.forEach(entry => {
+
+                    if (
+                        entry.isIntersecting
+                    ) {
+
+                        entry.target.classList.add(
+                            "visible"
+                        );
+
+                        observer.unobserve(
+                            entry.target
+                        );
+                    }
+                });
+            },
+            {
+                threshold: 0.1
+            }
+        );
+
+    elements.forEach(
+        element =>
+            observer.observe(element)
+    );
+}
+
+
+/* =========================================================
+   MOBILE SIDEBAR
+   ========================================================= */
+
+function initMobileMenu() {
+    const button =
+        document.querySelector(
+            ".mobile-menu-btn"
+        );
+
+    const sidebar =
+        document.querySelector(
+            ".sidebar"
+        );
+
+    if (!button || !sidebar) {
+        return;
+    }
+
+    button.addEventListener(
+        "click",
+        () => {
+            sidebar.classList.toggle(
+                "open"
+            );
+        }
+    );
+}
+
+
+/* =========================================================
+   MODAL CLICK OUTSIDE
+   ========================================================= */
+
+function initModalHandlers() {
+    document.addEventListener(
+        "click",
+        event => {
+
+            const tableModal =
+                $("tableModal");
+
+            const editModal =
+                $("editModal");
+
+            if (
+                tableModal &&
+                event.target === tableModal
+            ) {
+                closeTableModal();
+            }
+
+            if (
+                editModal &&
+                event.target === editModal
+            ) {
+                closeEditModal();
+            }
+        }
+    );
+}
+
+
+/* =========================================================
+   ESC KEY
+   ========================================================= */
+
+function initEscapeKey() {
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key !== "Escape"
+            ) {
+                return;
+            }
+
+            closeTableModal();
+            closeEditModal();
+        }
+    );
+}
+
+
+/* =========================================================
+   DATE CHIP
+   ========================================================= */
+
+function updateDateChip() {
+    const element =
+        document.querySelector(
+            ".date-chip"
+        );
+
+    if (!element) {
+        return;
+    }
+
+    const now =
+        new Date();
+
+    element.textContent =
+        now.toLocaleDateString(
+            "en-IN",
+            {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                year: "numeric"
+            }
+        );
+}
+
+
+/* =========================================================
+   LOGOUT HANDLER
+   ========================================================= */
+
+function initLogout() {
+    const logoutLinks =
+        document.querySelectorAll(
+            'a[href="/logout"], [data-logout]'
+        );
+
+    logoutLinks.forEach(link => {
+
+        link.addEventListener(
+            "click",
+            () => {
+                console.log(
+                    "Logging out..."
+                );
+            }
+        );
+    });
+}
+
+
+/* =========================================================
+   INITIALIZATION
+   ========================================================= */
+
+async function initializeDashboard() {
+
+    console.log(
+        "AI Business Management System starting..."
+    );
+
+    updateDateChip();
+
+    initCursorGlow();
+
+    initScrollReveal();
+
+    initMobileMenu();
+
+    initModalHandlers();
+
+    initEscapeKey();
+
+    initLogout();
+
+    await loadDashboard();
+
+    await loadAIAnalysis();
+
+    console.log(
+        "Dashboard initialization complete."
+    );
+}
+
+
+/* =========================================================
+   PAGE LOAD
+   ========================================================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        initializeDashboard()
+            .catch(error => {
+
+                console.error(
+                    "Initialization error:",
+                    error
+                );
+            });
+    }
+);
+
+
+/* =========================================================
+   GLOBAL FUNCTIONS
+   ========================================================= */
+
+window.loadDashboard =
+    loadDashboard;
+
+window.loadAIAnalysis =
+    loadAIAnalysis;
+
+window.openTable =
+    openTable;
+
+window.closeTableModal =
+    closeTableModal;
+
+window.showAddForm =
+    showAddForm;
+
+window.editRecord =
+    editRecord;
+
+window.saveRecord =
+    saveRecord;
+
+window.deleteRecord =
+    deleteRecord;
+
+window.closeEditModal =
+    closeEditModal;
+
+window.searchCurrentTable =
+    searchCurrentTable;
+
+window.changeTablePage =
+    changeTablePage;
+
+window.testDatabase =
+    testDatabase;
+
+window.loadTables =
+    loadTables;

@@ -1,530 +1,1586 @@
-from datetime import datetime
+"""
+AI Business Management System
+Business Intelligence / AI Analysis Module
+
+This module performs intelligent rule-based business analysis
+using the data received from the Flask dashboard.
+
+It does not require an external AI API.
+"""
+
+from typing import Any, Dict, List
 
 
-def safe_number(value, default=0):
+# =========================================================
+# BASIC HELPERS
+# =========================================================
+
+def safe_float(value, default=0.0):
     try:
         if value is None:
             return default
         return float(value)
-    except:
+    except (TypeError, ValueError):
         return default
 
 
-def percentage(part, total):
-    if total == 0:
-        return 0
-    return round((part / total) * 100, 2)
+def safe_int(value, default=0):
+    try:
+        if value is None:
+            return default
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
 
 
-def clamp(value, minimum=0, maximum=100):
-    return max(minimum, min(maximum, round(value)))
+def safe_list(value):
+    return value if isinstance(value, list) else []
 
 
-def score_from_ratio(ratio):
-    return clamp(ratio * 100)
+def safe_dict(value):
+    return value if isinstance(value, dict) else {}
 
 
-def build_admin_analysis(data):
-    """
-    Creates a detailed business analysis for ADMIN.
-    """
+def text(value, default="Unknown"):
+    if value is None:
+        return default
 
-    orders = safe_number(data.get("orders"))
-    sales = safe_number(data.get("sales"))
-    average_order = safe_number(data.get("average_order"))
-    highest_order = safe_number(data.get("highest_order"))
+    value = str(value).strip()
 
-    customers = safe_number(data.get("customers"))
-    products = safe_number(data.get("products"))
-    inventory = safe_number(data.get("inventory"))
-    employees = safe_number(data.get("employees"))
-    invoices = safe_number(data.get("invoices"))
-    projects = safe_number(data.get("projects"))
+    return value if value else default
 
-    completed = safe_number(data.get("completed_orders"))
-    pending = safe_number(data.get("pending_orders"))
-    cancelled = safe_number(data.get("cancelled_orders"))
 
-    low_stock = safe_number(data.get("low_stock"))
-    out_of_stock = safe_number(data.get("out_of_stock"))
+def first_value(row, keys, default=None):
+    if not isinstance(row, dict):
+        return default
 
-    paid_invoices = safe_number(data.get("paid_invoices"))
-    pending_invoices = safe_number(data.get("pending_invoices"))
+    for key in keys:
+        if key in row and row[key] is not None:
+            return row[key]
 
-    active_projects = safe_number(data.get("active_projects"))
-    completed_projects = safe_number(data.get("completed_projects"))
+    return default
 
-    # -------------------------
-    # SALES SCORE
-    # -------------------------
 
-    if sales <= 0:
-        sales_score = 25
-    elif sales >= 100000:
-        sales_score = 100
-    elif sales >= 50000:
-        sales_score = 90
-    elif sales >= 25000:
-        sales_score = 80
-    elif sales >= 10000:
-        sales_score = 70
+# =========================================================
+# SCORE
+# =========================================================
+
+def score_label(score):
+
+    score = safe_float(score)
+
+    if score >= 90:
+        return "Excellent"
+
+    if score >= 75:
+        return "Very Good"
+
+    if score >= 60:
+        return "Good"
+
+    if score >= 45:
+        return "Moderate"
+
+    if score >= 30:
+        return "Needs Attention"
+
+    return "Critical"
+
+
+def score_message(score):
+
+    score = safe_float(score)
+
+    if score >= 90:
+        return "Business performance is excellent across the available indicators."
+
+    if score >= 75:
+        return "Business performance is strong with some areas that can still be improved."
+
+    if score >= 60:
+        return "Business performance is generally healthy but should be monitored."
+
+    if score >= 45:
+        return "Business activity is moderate and several areas need improvement."
+
+    if score >= 30:
+        return "Several important business indicators require attention."
+
+    return "The available data indicates significant areas requiring immediate attention."
+
+
+# =========================================================
+# AMOUNT
+# =========================================================
+
+def get_amount(row):
+
+    return safe_float(
+        first_value(
+            row,
+            [
+                "total_amount",
+                "amount",
+                "total",
+                "grand_total",
+                "order_amount",
+                "invoice_amount",
+                "price"
+            ],
+            0
+        )
+    )
+
+
+# =========================================================
+# MONTHLY SALES
+# =========================================================
+
+def analyze_monthly_sales(data):
+
+    result = []
+
+    for row in safe_list(data):
+
+        if not isinstance(row, dict):
+            continue
+
+        month = first_value(
+            row,
+            ["month", "Month"],
+            "Unknown"
+        )
+
+        sales = safe_float(
+            first_value(
+                row,
+                ["sales", "total_sales", "amount"],
+                0
+            )
+        )
+
+        result.append({
+            "month": str(month),
+            "sales": round(sales, 2)
+        })
+
+    if not result:
+
+        return {
+            "data": [],
+            "best_month": None,
+            "worst_month": None,
+            "average_monthly_sales": 0,
+            "growth_percent": 0,
+            "trend": "No Data"
+        }
+
+    best = max(
+        result,
+        key=lambda x: x["sales"]
+    )
+
+    worst = min(
+        result,
+        key=lambda x: x["sales"]
+    )
+
+    average = sum(
+        x["sales"] for x in result
+    ) / len(result)
+
+    if len(result) >= 2:
+
+        previous = result[-2]["sales"]
+        current = result[-1]["sales"]
+
+        if previous == 0:
+            growth = 100 if current > 0 else 0
+        else:
+            growth = (
+                (current - previous)
+                / previous
+            ) * 100
+
     else:
-        sales_score = 55
+        growth = 0
 
-    sales_score = clamp(sales_score)
+    if growth > 5:
+        trend = "Growing"
+    elif growth < -5:
+        trend = "Declining"
+    else:
+        trend = "Stable"
 
-    # -------------------------
-    # ORDER SCORE
-    # -------------------------
+    return {
+        "data": result,
 
-    total_status_orders = completed + pending + cancelled
+        "best_month": {
+            "month": best["month"],
+            "sales": best["sales"]
+        },
 
-    if total_status_orders > 0:
-        completion_rate = percentage(completed, total_status_orders)
-        cancellation_rate = percentage(cancelled, total_status_orders)
+        "worst_month": {
+            "month": worst["month"],
+            "sales": worst["sales"]
+        },
+
+        "average_monthly_sales": round(
+            average,
+            2
+        ),
+
+        "growth_percent": round(
+            growth,
+            2
+        ),
+
+        "trend": trend
+    }
+
+
+# =========================================================
+# ORDER ANALYSIS
+# =========================================================
+
+def analyze_orders(
+    orders,
+    kpis,
+    status_data
+):
+
+    orders = safe_list(orders)
+    kpis = safe_dict(kpis)
+    status_data = safe_dict(status_data)
+
+    total_orders = safe_int(
+        kpis.get(
+            "total_orders",
+            len(orders)
+        )
+    )
+
+    total_sales = safe_float(
+        kpis.get(
+            "total_sales",
+            sum(
+                get_amount(x)
+                for x in orders
+            )
+        )
+    )
+
+    average_order = safe_float(
+        kpis.get(
+            "average_order",
+            total_sales / total_orders
+            if total_orders else 0
+        )
+    )
+
+    highest_order = safe_float(
+        kpis.get(
+            "highest_order",
+            max(
+                [
+                    get_amount(x)
+                    for x in orders
+                ],
+                default=0
+            )
+        )
+    )
+
+    completed = 0
+    pending = 0
+    cancelled = 0
+
+    for status, count in status_data.items():
+
+        s = str(status).lower()
+
+        count = safe_int(count)
+
+        if s in [
+            "completed",
+            "complete",
+            "delivered",
+            "success",
+            "successful"
+        ]:
+            completed += count
+
+        elif s in [
+            "pending",
+            "processing",
+            "in progress",
+            "in_progress"
+        ]:
+            pending += count
+
+        elif s in [
+            "cancelled",
+            "canceled",
+            "failed",
+            "rejected"
+        ]:
+            cancelled += count
+
+    completion_rate = (
+        completed / total_orders * 100
+        if total_orders
+        else 0
+    )
+
+    cancellation_rate = (
+        cancelled / total_orders * 100
+        if total_orders
+        else 0
+    )
+
+    if cancellation_rate > 20:
+        health = "Critical"
+
+    elif cancellation_rate > 10:
+        health = "Needs Attention"
+
+    elif completion_rate >= 70:
+        health = "Healthy"
+
+    else:
+        health = "Moderate"
+
+    return {
+        "total_orders": total_orders,
+        "total_sales": round(total_sales, 2),
+        "average_order": round(average_order, 2),
+        "highest_order": round(highest_order, 2),
+        "completed_orders": completed,
+        "pending_orders": pending,
+        "cancelled_orders": cancelled,
+        "completion_rate": round(
+            completion_rate,
+            2
+        ),
+        "cancellation_rate": round(
+            cancellation_rate,
+            2
+        ),
+        "statuses": status_data,
+        "health": health
+    }
+
+
+# =========================================================
+# PRODUCT ANALYSIS
+# =========================================================
+
+def analyze_products(
+    products,
+    performance
+):
+
+    products = safe_list(products)
+    performance = safe_list(performance)
+
+    if not performance:
+        performance = products
+
+    result = []
+
+    for row in performance:
+
+        if not isinstance(row, dict):
+            continue
+
+        name = first_value(
+            row,
+            [
+                "product_name",
+                "name",
+                "product",
+                "title"
+            ],
+            "Unknown Product"
+        )
+
+        sales = safe_float(
+            first_value(
+                row,
+                [
+                    "sales",
+                    "total_sales",
+                    "revenue",
+                    "amount"
+                ],
+                0
+            )
+        )
+
+        quantity = safe_float(
+            first_value(
+                row,
+                [
+                    "quantity",
+                    "units",
+                    "count",
+                    "orders"
+                ],
+                0
+            )
+        )
+
+        result.append({
+            "product": str(name),
+            "sales": round(sales, 2),
+            "quantity": round(quantity, 2)
+        })
+
+    result.sort(
+        key=lambda x: (
+            x["sales"],
+            x["quantity"]
+        ),
+        reverse=True
+    )
+
+    return {
+        "total_products": len(products),
+        "performance": result,
+        "best_product": (
+            result[0]
+            if result
+            else None
+        ),
+        "health": (
+            "Strong"
+            if result
+            else "No Data"
+        )
+    }
+
+
+# =========================================================
+# PROJECT ANALYSIS
+# =========================================================
+
+def analyze_projects(
+    projects,
+    status_data
+):
+
+    projects = safe_list(projects)
+    status_data = safe_dict(status_data)
+
+    completed = 0
+    active = 0
+    pending = 0
+
+    for status, count in status_data.items():
+
+        s = str(status).lower()
+        count = safe_int(count)
+
+        if s in [
+            "completed",
+            "complete",
+            "finished",
+            "done"
+        ]:
+            completed += count
+
+        elif s in [
+            "active",
+            "ongoing",
+            "in progress",
+            "in_progress"
+        ]:
+            active += count
+
+        elif s in [
+            "pending",
+            "planned",
+            "not started"
+        ]:
+            pending += count
+
+    total = len(projects)
+
+    completion_rate = (
+        completed / total * 100
+        if total
+        else 0
+    )
+
+    if completion_rate >= 70:
+        health = "Strong"
+
+    elif completion_rate >= 40:
+        health = "Moderate"
+
+    elif total:
+        health = "Needs Attention"
+
+    else:
+        health = "No Data"
+
+    return {
+        "total_projects": total,
+        "completed_projects": completed,
+        "active_projects": active,
+        "pending_projects": pending,
+        "completion_rate": round(
+            completion_rate,
+            2
+        ),
+        "statuses": status_data,
+        "health": health
+    }
+
+
+# =========================================================
+# INVENTORY ANALYSIS
+# =========================================================
+
+def analyze_inventory(
+    inventory,
+    category_data
+):
+
+    inventory = safe_list(inventory)
+
+    low_stock = 0
+    out_of_stock = 0
+    healthy = 0
+    total_quantity = 0
+
+    for row in inventory:
+
+        quantity = safe_float(
+            first_value(
+                row,
+                [
+                    "quantity",
+                    "stock",
+                    "stock_quantity",
+                    "qty"
+                ],
+                0
+            )
+        )
+
+        total_quantity += quantity
+
+        if quantity <= 0:
+            out_of_stock += 1
+
+        elif quantity <= 10:
+            low_stock += 1
+
+        else:
+            healthy += 1
+
+    if out_of_stock:
+        health = "Critical"
+
+    elif low_stock:
+        health = "Needs Attention"
+
+    elif inventory:
+        health = "Healthy"
+
+    else:
+        health = "No Data"
+
+    return {
+        "total_items": len(inventory),
+        "total_quantity": round(
+            total_quantity,
+            2
+        ),
+        "low_stock_items": low_stock,
+        "out_of_stock_items": out_of_stock,
+        "healthy_stock_items": healthy,
+        "category_data": safe_dict(
+            category_data
+        ),
+        "health": health
+    }
+
+
+# =========================================================
+# INVOICE ANALYSIS
+# =========================================================
+
+def analyze_invoices(
+    invoices,
+    status_data
+):
+
+    invoices = safe_list(invoices)
+    status_data = safe_dict(status_data)
+
+    paid = 0
+    unpaid = 0
+    pending = 0
+    total_amount = 0
+
+    for row in invoices:
+        total_amount += get_amount(row)
+
+    for status, count in status_data.items():
+
+        s = str(status).lower()
+        count = safe_int(count)
+
+        if s in [
+            "paid",
+            "completed",
+            "complete",
+            "settled"
+        ]:
+            paid += count
+
+        elif s in [
+            "unpaid",
+            "overdue",
+            "failed"
+        ]:
+            unpaid += count
+
+        elif s in [
+            "pending",
+            "processing"
+        ]:
+            pending += count
+
+    total = len(invoices)
+
+    paid_rate = (
+        paid / total * 100
+        if total
+        else 0
+    )
+
+    return {
+        "total_invoices": total,
+        "total_amount": round(
+            total_amount,
+            2
+        ),
+        "paid_invoices": paid,
+        "unpaid_invoices": unpaid,
+        "pending_invoices": pending,
+        "paid_rate": round(
+            paid_rate,
+            2
+        ),
+        "statuses": status_data,
+        "health": (
+            "Needs Attention"
+            if unpaid
+            else "Healthy"
+            if total
+            else "No Data"
+        )
+    }
+
+
+# =========================================================
+# EMPLOYEE ANALYSIS
+# =========================================================
+
+def analyze_employees(
+    employees,
+    department_data
+):
+
+    employees = safe_list(employees)
+
+    active = 0
+    inactive = 0
+
+    for row in employees:
+
+        status = str(
+            first_value(
+                row,
+                [
+                    "status",
+                    "employee_status"
+                ],
+                "active"
+            )
+        ).lower()
+
+        if status in [
+            "inactive",
+            "left",
+            "terminated",
+            "resigned"
+        ]:
+            inactive += 1
+        else:
+            active += 1
+
+    total = len(employees)
+
+    active_rate = (
+        active / total * 100
+        if total
+        else 0
+    )
+
+    return {
+        "total_employees": total,
+        "active_employees": active,
+        "inactive_employees": inactive,
+        "active_rate": round(
+            active_rate,
+            2
+        ),
+        "department_data": safe_dict(
+            department_data
+        ),
+        "health": (
+            "Healthy"
+            if active_rate >= 70
+            else "Needs Attention"
+        )
+    }
+
+
+# =========================================================
+# CUSTOMER ANALYSIS
+# =========================================================
+
+def analyze_customers(
+    customers,
+    activity
+):
+
+    customers = safe_list(customers)
+    activity = safe_list(activity)
+
+    active = 0
+
+    for row in activity:
+
+        count = safe_int(
+            first_value(
+                row,
+                [
+                    "orders",
+                    "order_count",
+                    "total_orders",
+                    "count"
+                ],
+                0
+            )
+        )
+
+        if count > 0:
+            active += 1
+
+    engagement = (
+        active / len(activity) * 100
+        if activity
+        else 0
+    )
+
+    return {
+        "total_customers": len(customers),
+        "active_customers": active,
+        "engagement_rate": round(
+            engagement,
+            2
+        ),
+        "activity": activity,
+        "health": (
+            "Strong"
+            if engagement >= 70
+            else "Moderate"
+            if engagement >= 40
+            else "Needs Attention"
+            if customers
+            else "No Data"
+        )
+    }
+
+
+# =========================================================
+# BUSINESS SCORE
+# =========================================================
+
+def calculate_score(
+    orders,
+    monthly,
+    products,
+    projects,
+    inventory=None,
+    invoices=None,
+    employees=None,
+    customers=None,
+    role="admin"
+):
+
+    growth = safe_float(
+        monthly.get(
+            "growth_percent"
+        )
+    )
+
+    # SALES
+    if orders["total_sales"] > 0:
+
+        sales_score = 70
+
+        if growth > 20:
+            sales_score += 30
+        elif growth > 10:
+            sales_score += 20
+        elif growth > 0:
+            sales_score += 10
+        elif growth < -20:
+            sales_score -= 25
+        elif growth < -10:
+            sales_score -= 15
+        elif growth < 0:
+            sales_score -= 8
+
+    else:
+        sales_score = 0
+
+    # ORDERS
+    if orders["total_orders"]:
 
         order_score = (
-            completion_rate
-            - (cancellation_rate * 0.7)
-            + 30
+            orders["completion_rate"]
+            -
+            orders["cancellation_rate"]
+            * 0.5
         )
+
+        order_score = max(
+            0,
+            min(100, order_score)
+        )
+
     else:
-        completion_rate = 0
-        cancellation_rate = 0
-        order_score = 50
+        order_score = 0
 
-    order_score = clamp(order_score)
+    # PRODUCTS
+    if products["total_products"]:
 
-    # -------------------------
-    # CUSTOMER SCORE
-    # -------------------------
+        product_score = 70
 
-    if customers == 0:
-        customer_score = 25
-    elif orders == 0:
-        customer_score = 50
+        if products["performance"]:
+            product_score += 20
+
+        if products["best_product"]:
+            product_score += 10
+
+        product_score = min(
+            100,
+            product_score
+        )
+
     else:
-        orders_per_customer = orders / customers
+        product_score = 0
 
-        if orders_per_customer >= 5:
-            customer_score = 95
-        elif orders_per_customer >= 3:
-            customer_score = 85
-        elif orders_per_customer >= 2:
-            customer_score = 75
-        elif orders_per_customer >= 1:
-            customer_score = 65
-        else:
-            customer_score = 50
+    # PROJECTS
+    project_score = projects[
+        "completion_rate"
+    ]
 
-    customer_score = clamp(customer_score)
-
-    # -------------------------
-    # PRODUCT SCORE
-    # -------------------------
-
-    if products == 0:
-        product_score = 30
-    elif orders >= products * 3:
-        product_score = 95
-    elif orders >= products * 2:
-        product_score = 85
-    elif orders >= products:
-        product_score = 75
-    else:
-        product_score = 60
-
-    product_score = clamp(product_score)
-
-    # -------------------------
-    # INVENTORY SCORE
-    # -------------------------
-
-    if inventory == 0:
-        inventory_score = 45
-    else:
-        inventory_problem_rate = percentage(
-            low_stock + out_of_stock,
-            inventory
-        )
-
-        inventory_score = 100 - inventory_problem_rate
-
-        if out_of_stock > 0:
-            inventory_score -= 10
-
-    inventory_score = clamp(inventory_score)
-
-    # -------------------------
-    # INVOICE SCORE
-    # -------------------------
-
-    if invoices == 0:
-        invoice_score = 50
-    else:
-        payment_rate = percentage(paid_invoices, invoices)
-        invoice_score = payment_rate
-
-        if pending_invoices > invoices * 0.5:
-            invoice_score -= 15
-
-    invoice_score = clamp(invoice_score)
-
-    # -------------------------
-    # EMPLOYEE SCORE
-    # -------------------------
-
-    if employees == 0:
-        employee_score = 40
-    elif orders == 0:
-        employee_score = 60
-    else:
-        orders_per_employee = orders / employees
-
-        if orders_per_employee >= 10:
-            employee_score = 95
-        elif orders_per_employee >= 5:
-            employee_score = 85
-        elif orders_per_employee >= 2:
-            employee_score = 75
-        else:
-            employee_score = 65
-
-    employee_score = clamp(employee_score)
-
-    # -------------------------
-    # PROJECT SCORE
-    # -------------------------
-
-    if projects == 0:
-        project_score = 50
-    else:
-        project_completion_rate = percentage(
-            completed_projects,
-            projects
-        )
-
-        project_score = 50 + (project_completion_rate * 0.5)
-
-        if active_projects > 0:
-            project_score += 10
-
-    project_score = clamp(project_score)
-
-    # -------------------------
-    # OVERALL SCORE
-    # -------------------------
-
-    overall_score = round(
-        (
-            sales_score +
-            order_score +
-            customer_score +
-            product_score +
-            inventory_score +
-            invoice_score +
-            employee_score +
-            project_score
-        ) / 8
-    )
-
-    # -------------------------
-    # BUSINESS LEVEL
-    # -------------------------
-
-    if overall_score >= 90:
-        business_level = "Excellent"
-    elif overall_score >= 80:
-        business_level = "Very Strong"
-    elif overall_score >= 70:
-        business_level = "Healthy"
-    elif overall_score >= 60:
-        business_level = "Moderate"
-    elif overall_score >= 45:
-        business_level = "Needs Attention"
-    else:
-        business_level = "Critical"
-
-    # -------------------------
-    # EXPLANATIONS
-    # -------------------------
-
-    sales_explanation = (
-        f"The business generated total sales of ₹{sales:,.2f}. "
-        f"The average order value is ₹{average_order:,.2f}, "
-        f"while the highest recorded order is ₹{highest_order:,.2f}. "
-        f"The sales performance score is {sales_score}/100."
-    )
-
-    order_explanation = (
-        f"There are {int(orders)} orders in the system. "
-        f"{int(completed)} are completed, "
-        f"{int(pending)} are pending and "
-        f"{int(cancelled)} are cancelled. "
-        f"The completion rate is {completion_rate}% "
-        f"and the cancellation rate is {cancellation_rate}%. "
-        f"The order management score is {order_score}/100."
-    )
-
-    customer_explanation = (
-        f"The system contains {int(customers)} customers. "
-        f"There are approximately {round(orders / customers, 2) if customers else 0} "
-        f"orders per customer. "
-        f"The customer engagement score is {customer_score}/100."
-    )
-
-    product_explanation = (
-        f"The business currently manages {int(products)} products. "
-        f"The relationship between product count and order activity "
-        f"produces a product performance score of {product_score}/100."
-    )
-
-    inventory_explanation = (
-        f"There are {int(inventory)} inventory records. "
-        f"{int(low_stock)} records are classified as low stock and "
-        f"{int(out_of_stock)} are out of stock. "
-        f"The inventory health score is {inventory_score}/100."
-    )
-
-    invoice_explanation = (
-        f"There are {int(invoices)} invoices. "
-        f"{int(paid_invoices)} are paid and "
-        f"{int(pending_invoices)} are pending. "
-        f"The invoice/payment score is {invoice_score}/100."
-    )
-
-    employee_explanation = (
-        f"The organization contains {int(employees)} employees. "
-        f"Based on order activity relative to employee count, "
-        f"the workforce efficiency score is {employee_score}/100."
-    )
-
-    project_explanation = (
-        f"The system contains {int(projects)} projects. "
-        f"{int(active_projects)} are active and "
-        f"{int(completed_projects)} are completed. "
-        f"The project performance score is {project_score}/100."
-    )
-
-    # -------------------------
-    # RECOMMENDATIONS
-    # -------------------------
-
-    recommendations = []
-
-    if cancellation_rate > 15:
-        recommendations.append(
-            "High cancellation rate detected. Investigate cancelled orders and customer issues."
-        )
-
-    if pending > completed:
-        recommendations.append(
-            "Pending orders are higher than completed orders. Improve order processing speed."
-        )
-
-    if low_stock > 0:
-        recommendations.append(
-            f"{int(low_stock)} low-stock inventory records detected. Consider reordering important products."
-        )
-
-    if out_of_stock > 0:
-        recommendations.append(
-            f"{int(out_of_stock)} products appear to be out of stock. Immediate inventory attention is recommended."
-        )
-
-    if pending_invoices > invoices * 0.3 if invoices else False:
-        recommendations.append(
-            "A significant number of invoices are pending. Follow up with customers for payment."
-        )
-
-    if project_score < 65:
-        recommendations.append(
-            "Project completion performance is relatively low. Review delayed projects."
-        )
-
-    if customer_score < 65:
-        recommendations.append(
-            "Customer engagement is moderate. Consider loyalty programs and follow-up campaigns."
-        )
-
-    if sales_score < 65:
-        recommendations.append(
-            "Sales performance is below the desired level. Focus on high-value products and customer retention."
-        )
-
-    if not recommendations:
-        recommendations.append(
-            "Business indicators are healthy. Continue monitoring sales, customers, inventory and invoices."
-        )
-
-    return {
-        "overall_score": overall_score,
-        "business_level": business_level,
-
-        "scores": {
-            "sales": sales_score,
-            "orders": order_score,
-            "customers": customer_score,
-            "products": product_score,
-            "inventory": inventory_score,
-            "invoices": invoice_score,
-            "employees": employee_score,
-            "projects": project_score
-        },
-
-        "explanations": {
-            "sales": sales_explanation,
-            "orders": order_explanation,
-            "customers": customer_explanation,
-            "products": product_explanation,
-            "inventory": inventory_explanation,
-            "invoices": invoice_explanation,
-            "employees": employee_explanation,
-            "projects": project_explanation
-        },
-
-        "recommendations": recommendations,
-
-        "summary": (
-            f"The AI analysis rates the overall business at "
-            f"{overall_score}/100 ({business_level}). "
-            f"The analysis considers sales performance, order completion, "
-            f"customer activity, product performance, inventory health, "
-            f"invoice collection, employee efficiency and project progress."
-        )
+    components = {
+        "sales": round(sales_score),
+        "orders": round(order_score),
+        "products": round(product_score),
+        "projects": round(project_score)
     }
 
+    if role == "user":
 
-def build_user_analysis(data):
+        weights = {
+            "sales": 0.30,
+            "orders": 0.35,
+            "products": 0.15,
+            "projects": 0.20
+        }
 
-    orders = safe_number(data.get("orders"))
-    sales = safe_number(data.get("sales"))
-    customers = safe_number(data.get("customers"))
-    products = safe_number(data.get("products"))
-    projects = safe_number(data.get("projects"))
-
-    completed = safe_number(data.get("completed_orders"))
-    pending = safe_number(data.get("pending_orders"))
-    cancelled = safe_number(data.get("cancelled_orders"))
-
-    total = completed + pending + cancelled
-
-    if total:
-        completion_rate = percentage(completed, total)
-        cancellation_rate = percentage(cancelled, total)
     else:
-        completion_rate = 0
-        cancellation_rate = 0
 
-    sales_score = 80 if sales > 0 else 40
+        weights = {
+            "sales": 0.20,
+            "orders": 0.20,
+            "products": 0.10,
+            "projects": 0.10,
+            "inventory": 0.15,
+            "invoices": 0.10,
+            "employees": 0.075,
+            "customers": 0.075
+        }
 
-    if completion_rate >= 80:
-        order_score = 95
-    elif completion_rate >= 60:
-        order_score = 80
-    elif completion_rate >= 40:
-        order_score = 65
-    else:
-        order_score = 50
+        if inventory is not None:
 
-    customer_score = 80 if customers > 0 else 40
-    product_score = 80 if products > 0 else 45
-    project_score = 80 if projects > 0 else 50
+            total = inventory[
+                "total_items"
+            ]
 
-    overall_score = round(
-        (
-            sales_score +
-            order_score +
-            customer_score +
-            product_score +
-            project_score
-        ) / 5
-    )
+            if total:
 
-    if overall_score >= 85:
-        level = "Excellent"
-    elif overall_score >= 70:
-        level = "Healthy"
-    elif overall_score >= 55:
-        level = "Moderate"
-    else:
-        level = "Needs Attention"
+                inventory_score = 100
 
-    recommendations = []
+                inventory_score -= (
+                    inventory[
+                        "out_of_stock_items"
+                    ]
+                    / total
+                    * 60
+                )
 
-    if cancellation_rate > 15:
-        recommendations.append(
-            "Order cancellation rate is high. Review cancelled orders."
-        )
+                inventory_score -= (
+                    inventory[
+                        "low_stock_items"
+                    ]
+                    / total
+                    * 30
+                )
 
-    if pending > completed:
-        recommendations.append(
-            "Pending orders exceed completed orders. Improve order processing."
-        )
+                components[
+                    "inventory"
+                ] = round(
+                    max(
+                        0,
+                        min(
+                            100,
+                            inventory_score
+                        )
+                    )
+                )
 
-    if customers < 5:
-        recommendations.append(
-            "Customer base is currently small. Focus on customer acquisition."
-        )
+        if invoices is not None:
 
-    if sales <= 0:
-        recommendations.append(
-            "No sales value was detected. Verify order amount data."
-        )
-
-    if not recommendations:
-        recommendations.append(
-            "The available business indicators look healthy. Continue monitoring performance."
-        )
-
-    return {
-        "overall_score": overall_score,
-        "business_level": level,
-
-        "scores": {
-            "sales": sales_score,
-            "orders": order_score,
-            "customers": customer_score,
-            "products": product_score,
-            "projects": project_score
-        },
-
-        "explanations": {
-            "sales": (
-                f"Total sales are ₹{sales:,.2f}. "
-                f"The sales performance score is {sales_score}/100."
-            ),
-
-            "orders": (
-                f"There are {int(orders)} orders. "
-                f"{int(completed)} are completed, "
-                f"{int(pending)} are pending and "
-                f"{int(cancelled)} are cancelled. "
-                f"Completion rate is {completion_rate}%."
-            ),
-
-            "customers": (
-                f"The system contains {int(customers)} customers. "
-                f"The customer availability score is {customer_score}/100."
-            ),
-
-            "products": (
-                f"The system contains {int(products)} products. "
-                f"The product availability score is {product_score}/100."
-            ),
-
-            "projects": (
-                f"The system contains {int(projects)} projects. "
-                f"The project availability score is {project_score}/100."
+            components[
+                "invoices"
+            ] = round(
+                invoices["paid_rate"]
             )
-        },
+
+        if employees is not None:
+
+            components[
+                "employees"
+            ] = round(
+                employees["active_rate"]
+            )
+
+        if customers is not None:
+
+            components[
+                "customers"
+            ] = round(
+                customers["engagement_rate"]
+            )
+
+    active_weights = {
+        key: value
+        for key, value in weights.items()
+        if key in components
+    }
+
+    weight_sum = sum(
+        active_weights.values()
+    )
+
+    if weight_sum:
+
+        score = sum(
+            components[key]
+            *
+            (
+                active_weights[key]
+                / weight_sum
+            )
+            for key in active_weights
+        )
+
+    else:
+
+        score = 0
+
+    return {
+        "score": round(
+            max(
+                0,
+                min(100, score)
+            )
+        ),
+        "components": components
+    }
+
+
+# =========================================================
+# STRENGTHS
+# =========================================================
+
+def generate_strengths(
+    orders,
+    monthly,
+    products,
+    projects,
+    inventory,
+    invoices,
+    employees,
+    customers,
+    role
+):
+
+    strengths = []
+
+    if monthly["growth_percent"] > 10:
+
+        strengths.append(
+            f"Monthly sales are growing by "
+            f"{monthly['growth_percent']:.1f}%."
+        )
+
+    if orders["completion_rate"] >= 70:
+
+        strengths.append(
+            f"Order completion rate is strong at "
+            f"{orders['completion_rate']:.1f}%."
+        )
+
+    if products["best_product"]:
+
+        strengths.append(
+            f"{products['best_product']['product']} "
+            "is the strongest available product."
+        )
+
+    if projects["completion_rate"] >= 70:
+
+        strengths.append(
+            f"Project completion rate is "
+            f"{projects['completion_rate']:.1f}%."
+        )
+
+    if role == "admin":
+
+        if inventory and inventory[
+            "out_of_stock_items"
+        ] == 0:
+
+            strengths.append(
+                "No out-of-stock inventory items were detected."
+            )
+
+        if invoices and invoices[
+            "paid_rate"
+        ] >= 70:
+
+            strengths.append(
+                f"Invoice payment performance is strong "
+                f"at {invoices['paid_rate']:.1f}%."
+            )
+
+        if employees and employees[
+            "active_rate"
+        ] >= 80:
+
+            strengths.append(
+                f"Employee activity is healthy at "
+                f"{employees['active_rate']:.1f}%."
+            )
+
+        if customers and customers[
+            "engagement_rate"
+        ] >= 70:
+
+            strengths.append(
+                f"Customer engagement is strong at "
+                f"{customers['engagement_rate']:.1f}%."
+            )
+
+    if not strengths:
+
+        strengths.append(
+            "Business data is available for continued monitoring."
+        )
+
+    return strengths
+
+
+# =========================================================
+# RISKS
+# =========================================================
+
+def generate_risks(
+    orders,
+    monthly,
+    products,
+    projects,
+    inventory,
+    invoices,
+    employees,
+    customers,
+    role
+):
+
+    risks = []
+
+    if monthly["growth_percent"] < -10:
+
+        risks.append(
+            f"Monthly sales have declined by "
+            f"{abs(monthly['growth_percent']):.1f}%."
+        )
+
+    if orders["cancellation_rate"] > 10:
+
+        risks.append(
+            f"Order cancellation rate is "
+            f"{orders['cancellation_rate']:.1f}%."
+        )
+
+    if (
+        orders["total_orders"] > 0
+        and
+        orders["completion_rate"] < 50
+    ):
+
+        risks.append(
+            "Order completion rate is below 50%."
+        )
+
+    if (
+        projects["total_projects"] > 0
+        and
+        projects["completion_rate"] < 40
+    ):
+
+        risks.append(
+            "Project completion rate is low."
+        )
+
+    if role == "admin":
+
+        if inventory:
+
+            if inventory[
+                "out_of_stock_items"
+            ] > 0:
+
+                risks.append(
+                    f"{inventory['out_of_stock_items']} "
+                    "inventory item(s) are out of stock."
+                )
+
+            if inventory[
+                "low_stock_items"
+            ] > 0:
+
+                risks.append(
+                    f"{inventory['low_stock_items']} "
+                    "inventory item(s) have low stock."
+                )
+
+        if invoices and invoices[
+            "unpaid_invoices"
+        ] > 0:
+
+            risks.append(
+                f"{invoices['unpaid_invoices']} "
+                "invoice(s) are unpaid or overdue."
+            )
+
+        if (
+            employees
+            and
+            employees["active_rate"] < 60
+        ):
+
+            risks.append(
+                "Employee activity is relatively low."
+            )
+
+        if (
+            customers
+            and
+            customers["engagement_rate"] < 40
+        ):
+
+            risks.append(
+                "Customer engagement appears low."
+            )
+
+    if not risks:
+
+        risks.append(
+            "No major risk indicators were detected."
+        )
+
+    return risks
+
+
+# =========================================================
+# RECOMMENDATIONS
+# =========================================================
+
+def generate_recommendations(
+    orders,
+    monthly,
+    products,
+    projects,
+    inventory,
+    invoices,
+    employees,
+    customers,
+    role
+):
+
+    recommendations = []
+
+    if monthly["growth_percent"] < 0:
+
+        recommendations.append(
+            "Investigate the reason for declining sales "
+            "and focus on high-performing products."
+        )
+
+    else:
+
+        recommendations.append(
+            "Continue monitoring monthly sales and "
+            "increase the average order value."
+        )
+
+    if orders["cancellation_rate"] > 10:
+
+        recommendations.append(
+            "Investigate order cancellation reasons "
+            "and improve order processing."
+        )
+
+    if orders["completion_rate"] < 60:
+
+        recommendations.append(
+            "Improve order fulfillment and reduce pending orders."
+        )
+
+    if products["best_product"]:
+
+        recommendations.append(
+            f"Focus marketing and inventory planning on "
+            f"{products['best_product']['product']}."
+        )
+
+    if projects["completion_rate"] < 60:
+
+        recommendations.append(
+            "Review project timelines and prioritize delayed projects."
+        )
+
+    if role == "admin":
+
+        if inventory and (
+            inventory["low_stock_items"] > 0
+            or
+            inventory["out_of_stock_items"] > 0
+        ):
+
+            recommendations.append(
+                "Create a reorder plan for low-stock and "
+                "out-of-stock inventory."
+            )
+
+        if invoices and invoices[
+            "unpaid_invoices"
+        ] > 0:
+
+            recommendations.append(
+                "Follow up on unpaid invoices to improve cash flow."
+            )
+
+        if customers and customers[
+            "engagement_rate"
+        ] < 60:
+
+            recommendations.append(
+                "Improve customer engagement through follow-ups "
+                "and targeted offers."
+            )
+
+        if employees and employees[
+            "active_rate"
+        ] < 70:
+
+            recommendations.append(
+                "Review employee workload and activity."
+            )
+
+    return recommendations
+
+
+# =========================================================
+# MAIN FUNCTION
+# =========================================================
+
+def generate_ai_analysis(
+    dashboard_data=None,
+    role="admin"
+):
+
+    dashboard_data = safe_dict(
+        dashboard_data
+    )
+
+    role = str(
+        role or "user"
+    ).lower()
+
+    kpis = safe_dict(
+        dashboard_data.get("kpis")
+    )
+
+    monthly = analyze_monthly_sales(
+        dashboard_data.get(
+            "monthly_sales",
+            []
+        )
+    )
+
+    orders = analyze_orders(
+        dashboard_data.get(
+            "orders_data",
+            []
+        ),
+        kpis,
+        dashboard_data.get(
+            "order_status",
+            {}
+        )
+    )
+
+    products = analyze_products(
+        dashboard_data.get(
+            "products_data",
+            []
+        ),
+        dashboard_data.get(
+            "product_performance",
+            []
+        )
+    )
+
+    projects = analyze_projects(
+        dashboard_data.get(
+            "projects_data",
+            []
+        ),
+        dashboard_data.get(
+            "project_status",
+            {}
+        )
+    )
+
+    inventory = None
+    invoices = None
+    employees = None
+    customers = None
+
+    if role == "admin":
+
+        inventory = analyze_inventory(
+            dashboard_data.get(
+                "inventory_data",
+                []
+            ),
+            dashboard_data.get(
+                "inventory_category",
+                {}
+            )
+        )
+
+        invoices = analyze_invoices(
+            dashboard_data.get(
+                "invoice_data",
+                []
+            ),
+            dashboard_data.get(
+                "invoice_status",
+                {}
+            )
+        )
+
+        employees = analyze_employees(
+            dashboard_data.get(
+                "employee_data",
+                []
+            ),
+            dashboard_data.get(
+                "employee_department",
+                {}
+            )
+        )
+
+        customers = analyze_customers(
+            dashboard_data.get(
+                "customer_data",
+                []
+            ),
+            dashboard_data.get(
+                "customer_activity",
+                []
+            )
+        )
+
+    score = calculate_score(
+        orders,
+        monthly,
+        products,
+        projects,
+        inventory,
+        invoices,
+        employees,
+        customers,
+        role
+    )
+
+    strengths = generate_strengths(
+        orders,
+        monthly,
+        products,
+        projects,
+        inventory,
+        invoices,
+        employees,
+        customers,
+        role
+    )
+
+    risks = generate_risks(
+        orders,
+        monthly,
+        products,
+        projects,
+        inventory,
+        invoices,
+        employees,
+        customers,
+        role
+    )
+
+    recommendations = generate_recommendations(
+        orders,
+        monthly,
+        products,
+        projects,
+        inventory,
+        invoices,
+        employees,
+        customers,
+        role
+    )
+
+    total_sales = orders["total_sales"]
+    total_orders = orders["total_orders"]
+
+    summary = (
+        f"The current business health score is "
+        f"{score['score']}/100 ({score_label(score['score'])}). "
+        f"The system contains {total_orders} order(s) "
+        f"with total sales of ₹{total_sales:,.2f}. "
+        f"Monthly sales are currently {monthly['trend'].lower()}."
+    )
+
+    if role == "admin":
+
+        summary += (
+            f" Inventory contains "
+            f"{inventory['low_stock_items']} low-stock item(s), "
+            f"while invoice analysis identifies "
+            f"{invoices['unpaid_invoices']} unpaid invoice(s)."
+        )
+
+    return {
+        "success": True,
+
+        "role": role,
+
+        "score": score["score"],
+
+        "score_label": score_label(
+            score["score"]
+        ),
+
+        "score_message": score_message(
+            score["score"]
+        ),
+
+        "summary": summary,
+
+        "detailed_explanation": summary,
+
+        "components": score["components"],
+
+        "sales_analysis": monthly,
+
+        "order_analysis": orders,
+
+        "product_analysis": products,
+
+        "project_analysis": projects,
+
+        "strengths": strengths,
+
+        "risks": risks,
 
         "recommendations": recommendations,
 
-        "summary": (
-            f"The user-level AI analysis gives the business a score of "
-            f"{overall_score}/100 ({level}). "
-            f"This score is based only on the customer, order, product "
-            f"and project information available to the user."
-        )
+        "admin_analysis": (
+            {
+                "inventory": inventory,
+                "invoices": invoices,
+                "employees": employees,
+                "customers": customers
+            }
+            if role == "admin"
+            else {}
+        ),
+
+        "charts": {
+            "ai_score": {
+                "labels": list(
+                    score["components"].keys()
+                ),
+                "values": list(
+                    score["components"].values()
+                )
+            }
+        }
     }
+
+
+def build_ai_analysis(
+    dashboard_data=None,
+    role="admin"
+):
+
+    return generate_ai_analysis(
+        dashboard_data,
+        role
+    )
+
+
+def analyze_business(
+    dashboard_data=None,
+    role="admin"
+):
+
+    return generate_ai_analysis(
+        dashboard_data,
+        role
+    )

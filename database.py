@@ -5,26 +5,32 @@ DB_CONFIG = {
     "host": "localhost",
     "user": "root",
     "password": "Aniket$2007",
-    "database": "ai_business_management_system",
-    "autocommit": False
+    "database": "ai_business_management_system"
 }
 
 
 def get_connection():
+    """
+    Create and return a MySQL database connection.
+    """
+
     try:
         connection = mysql.connector.connect(**DB_CONFIG)
 
         if connection.is_connected():
             return connection
 
-        return None
-
     except Error as e:
         print("MySQL connection error:", e)
-        return None
+
+    return None
 
 
 def test_connection():
+    """
+    Test MySQL connection.
+    """
+
     connection = get_connection()
 
     if connection:
@@ -33,17 +39,26 @@ def test_connection():
             cursor.execute("SELECT DATABASE()")
             database = cursor.fetchone()
 
-            print("====================================")
-            print("MySQL connected successfully")
-            print("Database:", database[0] if database else "Unknown")
-            print("====================================")
-
             cursor.close()
             connection.close()
-            return True
 
-        except Error as e:
-            print("Database test error:", e)
-            return False
+            return {
+                "success": True,
+                "database": database[0] if database else None
+            }
 
-    return False
+        except Exception as e:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    return {
+        "success": False,
+        "error": "Unable to connect to MySQL"
+    }
